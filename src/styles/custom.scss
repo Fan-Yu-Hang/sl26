@@ -1,0 +1,152 @@
+// Custom styles for React components
+
+#logo {
+  display: flex;
+  justify-content: center;
+}
+
+.rotating-text {
+  display: inline-block;
+  position: relative;
+  height: 1.5em;
+  overflow: hidden;
+  width: 2em;
+}
+
+.rotating-item {
+  display: block;
+  position: absolute;
+  width: 100%;
+  animation: rotate 6s infinite;
+  opacity: 0;
+}
+
+.rotating-item:nth-child(1) {
+  animation-delay: 0s;
+}
+
+.rotating-item:nth-child(2) {
+  animation-delay: 2s;
+}
+
+.rotating-item:nth-child(3) {
+  animation-delay: 4s;
+}
+
+@keyframes rotate {
+  0%,
+  20% {
+    transform: translateY(0);
+    opacity: 1;
+  }
+
+  25%,
+  45% {
+    transform: translateY(-100%);
+    opacity: 0;
+  }
+
+  50%,
+  100% {
+    transform: translateY(100%);
+    opacity: 0;
+  }
+}
+
+.icon-logo {
+  width: 231px;
+  height: 116px;
+  object-fit: cover;
+}
+
+// Smooth scroll behavior
+html {
+  scroll-behavior: smooth;
+}
+
+// Mobile menu panel styles
+#navPanel {
+  display: none;
+  position: fixed;
+  top: 0;
+  right: 0;
+  width: 20em;
+  max-width: 80%;
+  height: 100vh;
+  background: #fff;
+  padding: 2em;
+  box-shadow: -2px 0 10px rgba(0, 0, 0, 0.1);
+  z-index: 10000;
+  overflow-y: auto;
+  transform: translateX(100%);
+  transition: transform 0.3s ease;
+
+  &.navPanel-visible {
+    display: block;
+    transform: translateX(0);
+  }
+
+  nav ul {
+    list-style: none;
+    padding: 0;
+
+    li {
+      margin: 1em 0;
+
+      a {
+        display: block;
+        padding: 0.5em 0;
+        border-bottom: 1px solid #eee;
+      }
+    }
+  }
+}
+
+#navButton {
+  display: none;
+  position: fixed;
+  top: 1em;
+  right: 1em;
+  z-index: 10001;
+  background: #fff;
+  padding: 0.5em;
+  border-radius: 4px;
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+
+  @media (max-width: 736px) {
+    display: block;
+  }
+
+  .toggle {
+    display: block;
+    width: 2em;
+    height: 2em;
+    background: #483949;
+    position: relative;
+
+    &::before,
+    &::after {
+      content: '';
+      position: absolute;
+      top: 50%;
+      left: 25%;
+      width: 50%;
+      height: 2px;
+      background: #fff;
+      transform: translateY(-50%);
+    }
+
+    &::after {
+      top: 30%;
+    }
+  }
+}
+
+// Carousel styles are defined in main.scss
+// Additional carousel enhancements can be added here if needed
+
+// Scrolly button
+.scrolly {
+  cursor: pointer;
+}
+

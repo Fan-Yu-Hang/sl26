@@ -1,0 +1,155 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  body {
+    @apply text-gray-900 antialiased m-0 p-0;
+    background-color: #EFEFE9;
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
+      'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue', sans-serif;
+    overflow-x: hidden;
+  }
+  
+  html {
+    scroll-behavior: smooth;
+    overflow-x: hidden;
+    max-width: 100vw;
+    margin: 0;
+    padding: 0;
+  }
+  
+  * {
+    box-sizing: border-box;
+  }
+}
+
+@layer components {
+  /* 旋转文本动画 */
+  .rotating-text {
+    @apply inline-block relative overflow-hidden;
+    width: 3.5ch;
+    min-width: 2.5ch;
+    height: 1.2em;
+    vertical-align: middle;
+    line-height: 1.2em;
+    flex-shrink: 0;
+  }
+  
+  @media (min-width: 640px) {
+    .rotating-text {
+      width: 3ch;
+      min-width: 3ch;
+    }
+  }
+  
+  @media (min-width: 768px) {
+    .rotating-text {
+      width: 3.5ch;
+      min-width: 3.5ch;
+    }
+  }
+  
+  @media (min-width: 1024px) {
+    .rotating-text {
+      width: 4ch;
+      min-width: 4ch;
+    }
+  }
+  
+  @media (min-width: 1280px) {
+    .rotating-text {
+      width: 4ch;
+      min-width: 4ch;
+    }
+  }
+
+  .rotating-item {
+    position: absolute;
+    left: 50%;
+    transform: translateX(-50%);
+    top: 0;
+    opacity: 0;
+    animation: rotateText 9s infinite;
+    white-space: nowrap;
+    display: block;
+    font-size: 1rem; /* 移动端基础字体 16px */
+    font-weight: bold;
+  }
+  
+  @media (min-width: 640px) {
+    .rotating-item {
+      font-size: 1.25rem; /* sm: 20px */
+    }
+  }
+  
+  @media (min-width: 768px) {
+    .rotating-item {
+      font-size: 1rem; /* md: 24px */
+    }
+  }
+  
+  @media (min-width: 1024px) {
+    .rotating-item {
+      font-size: 2.5rem; /* lg: 40px */
+    }
+  }
+  
+  @media (min-width: 1280px) {
+    .rotating-item {
+      font-size: 4.5rem; /* xl: 56px */
+    }
+  }
+
+  .rotating-item:nth-child(1) {
+    animation-delay: 0s;
+  }
+
+  .rotating-item:nth-child(2) {
+    animation-delay: 3s;
+  }
+
+  .rotating-item:nth-child(3) {
+    animation-delay: 6s;
+  }
+
+  @keyframes rotateText {
+    0% {
+      opacity: 0;
+      transform: translateX(-50%) translateY(1em);
+    }
+    5% {
+      opacity: 1;
+      transform: translateX(-50%) translateY(0);
+    }
+    28.33% {
+      opacity: 1;
+      transform: translateX(-50%) translateY(0);
+    }
+    33.33% {
+      opacity: 0;
+      transform: translateX(-50%) translateY(-1em);
+    }
+    33.34%,
+    100% {
+      opacity: 0;
+      transform: translateX(-50%) translateY(1em);
+    }
+  }
+
+}
+
+@layer utilities {
+  .text-balance {
+    text-wrap: balance;
+  }
+  
+  .scrollbar-hide::-webkit-scrollbar {
+    display: none;
+  }
+  
+  .scrollbar-hide {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+}
