@@ -1,0 +1,1119 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>SL官网Trae</title>
+    <style>
+      /* 页面基础样式与布局 */
+      html, body {
+        height: 100%;
+        margin: 0;
+        background: #f6f7fb;
+        color: #1f2937;
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans", "Apple Color Emoji", "Segoe UI Emoji";
+      }
+      .container {
+        min-height: 100%;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: flex-start;
+        padding: 32px 16px 48px;
+        box-sizing: border-box;
+      }
+      h1 {
+        margin: 0 0 28px;
+        font-size: 28px;
+        font-weight: 700;
+        letter-spacing: 0.5px;
+        text-align: center;
+      }
+
+      .title-input {
+        height: 28px;
+        border: 1px solid #cccccc;
+        font-size: 28px;
+        font-weight: 700;
+        letter-spacing: 0.5px;
+        text-align: center;
+        color: #333333;
+        line-height: 28px;
+        background: #ffffff;
+        outline: none;
+        transition: background-color 300ms ease, border-color 300ms ease, color 300ms ease;
+      }
+      .title-input::placeholder { color: #999999; }
+
+      /* 纵向排列的图片框区域 */
+      .stack {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 60px;
+        width: 100%;
+        max-width: 760px;
+      }
+
+      /* 单个图片框的包裹器：用于定位缩放滑条 */
+      .box-wrapper {
+        position: relative;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+      }
+
+      /* 图片框容器：固定 400x225，含边框与背景 */
+      .image-box {
+        width: 400px;
+        height: 225px;
+        position: relative;
+        background: linear-gradient(180deg, #ffffff, #f3f4f6);
+        border: 1px solid #e5e7eb;
+        border-radius: 10px;
+        box-shadow: 0 2px 10px rgba(0,0,0,0.06);
+        overflow: hidden;
+        cursor: pointer; /* 可点击打开上传 */
+        transition: box-shadow 160ms ease;
+      }
+      .image-box:hover { box-shadow: 0 6px 18px rgba(0,0,0,0.10); }
+
+      /* 提示覆盖层：未上传时显示，上传后隐藏 */
+      .hint {
+        position: absolute;
+        inset: 0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: #374151;
+        font-size: 14px;
+        user-select: none;
+        pointer-events: auto;
+        cursor: pointer;
+        background: rgba(243, 244, 246, 0.55);
+        backdrop-filter: blur(2px);
+        transition: background 160ms ease, color 160ms ease, box-shadow 160ms ease;
+        z-index: 2;
+      }
+      .hint:hover {
+        background: rgba(229, 231, 235, 0.75);
+        color: #111827;
+        box-shadow: inset 0 0 0 1px rgba(203, 213, 225, 0.9);
+      }
+      .hint:active {
+        background: rgba(209, 213, 219, 0.75);
+      }
+
+      /* 用于承载图片与变换的层 */
+      .viewport {
+        position: absolute;
+        inset: 0;
+        display: grid;
+        place-items: center;
+        will-change: transform;
+        background: transparent;
+        z-index: 1;
+      }
+      .viewport img {
+        max-width: none;
+        max-height: none;
+        user-select: none;
+        -webkit-user-drag: none;
+        pointer-events: auto;
+        transform-origin: top left;
+        transition: transform 380ms cubic-bezier(0.22, 1, 0.36, 1);
+        will-change: transform;
+        backface-visibility: hidden;
+      }
+
+      /* 上传状态与错误提示区域 */
+      .status {
+        position: absolute;
+        left: 10px;
+        bottom: 10px;
+        padding: 6px 10px;
+        font-size: 13px;
+        font-weight: 600;
+        line-height: 1.4;
+        border-radius: 8px;
+        color: #ffffff;
+        box-shadow: 0 2px 6px rgba(0,0,0,0.10);
+        backdrop-filter: blur(4px);
+        pointer-events: none;
+        z-index: 3;
+        transition: opacity 160ms ease;
+      }
+      .status.info { background: rgba(55, 65, 81, 0.92); }
+      .status.success { background: rgba(15, 118, 110, 0.92); }
+      .status.error { background: rgba(185, 28, 28, 0.92); }
+
+
+
+      /* 隐藏的文件输入 */
+      .file-input {
+        position: absolute;
+        opacity: 0;
+        width: 0.1px;
+        height: 0.1px;
+        left: -9999px;
+      }
+
+      .actions {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 0;
+        margin-top: 15px;
+        width: 100%;
+      }
+      .btn {
+        min-width: 80px;
+        width: auto;
+        height: 40px;
+        border-radius: 4px;
+        background: #ffffff;
+        font-size: 14px;
+        white-space: nowrap;
+        cursor: pointer;
+        transition: opacity 120ms ease, transform 120ms ease, background-color 300ms ease, color 300ms ease, border-color 300ms ease;
+      }
+      .btn:hover { opacity: 0.8; }
+      .btn:active { transform: scale(0.95); }
+      .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+      .btn.delete { border: 1px solid #ff0000; color: #ff0000; }
+      .btn.replace { border: 1px solid #00ff00; color: #00ff00; }
+      .btn.adjust { border: 1px solid #00ff00; color: #00ff00; }
+      .btn.adjust.active { background: #4CAF50; color: #ffffff; border-color: #4CAF50; }
+      .btn.adjust.locked { background: #9E9E9E; color: #ffffff; border-color: #9E9E9E; }
+
+      .overlay {
+        position: absolute;
+        inset: 0;
+        z-index: 4;
+        pointer-events: auto;
+        counter-reset: mark;
+      }
+      .overlay .mark {
+        position: absolute;
+        width: 20px;
+        height: 20px;
+        border-radius: 50%;
+        border: 1px solid #006400;
+        background: transparent;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+        counter-increment: mark;
+        box-shadow: 0 1px 2px rgba(0,0,0,0.08);
+        user-select: none;
+        transition: background-color 300ms ease, border-color 300ms ease, color 300ms ease, transform 180ms ease-out;
+      }
+      .overlay .mark.click-anim { animation: pressPulse 180ms ease-out; }
+      @keyframes pressPulse {
+        0% { transform: scale(0.96); }
+        100% { transform: scale(1); }
+      }
+      .overlay .mark .num {
+        font-size: 12px;
+        font-weight: 700;
+        color: #000000;
+        line-height: 1;
+      }
+      .overlay .mark.selected {
+        background: #3498db;
+        border-color: #3498db;
+      }
+      .overlay .mark.selected .num { color: #FFFFFF; }
+      .overlay .popover {
+        position: absolute;
+        background: #ffffff;
+        border: 1px solid #e5e7eb;
+        border-radius: 8px;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.12);
+        padding: 6px 8px;
+        font-size: 12px;
+        color: #1f2937;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        white-space: nowrap;
+        z-index: 10;
+      }
+      .overlay .popover .pop-btn {
+        min-width: 64px;
+        height: 28px;
+        border-radius: 6px;
+        background: #ffffff;
+        font-size: 12px;
+        cursor: pointer;
+        transition: opacity 120ms ease, transform 80ms ease;
+      }
+      .overlay .popover .pop-btn:hover { opacity: 0.85; }
+      .overlay .popover .pop-btn:active { transform: scale(0.97); }
+      .overlay .popover .pop-btn.confirm { border: 1px solid #ff0000; color: #ff0000; }
+
+      .text-panel {
+        position: absolute;
+        top: 0;
+        left: 0;
+        display: flex;
+        flex-direction: column;
+        align-items: stretch;
+        justify-content: space-between;
+        gap: 8px;
+      }
+      .tp-input {
+        width: 100%;
+        height: 100%;
+        box-sizing: border-box;
+        border: 1px solid #cbd5e1;
+        border-radius: 8px;
+        padding: 8px;
+        font-size: 14px;
+        outline: none;
+        transition: border-color 300ms ease-out, box-shadow 300ms ease-out;
+        resize: none;
+        overflow: auto;
+      }
+      .tp-input:focus { border-color: #4CAF50; box-shadow: 0 0 0 2px rgba(76,175,80,0.15); }
+
+      .seq-bar {
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 30px;
+        overflow-y: auto;
+      }
+      .seq-mark {
+        width: 20px;
+        height: 20px;
+        border-radius: 50%;
+        border: 1px solid #006400;
+        background: transparent;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        margin: 5px auto;
+        font-size: 12px;
+        font-weight: 700;
+        color: #000000;
+        transition: background-color 300ms ease-out, border-color 300ms ease-out, color 300ms ease-out, transform 180ms ease-out;
+        cursor: pointer;
+      }
+      .seq-mark.selected { background: #3498db; border-color: #3498db; color: #FFFFFF; }
+
+      /* 左侧 30px 外的垂直缩放滑条：10x160 */
+      .zoom-slider {
+        position: absolute;
+        right: calc(100% + 30px);
+        top: 50%;
+        transform: translateY(-50%);
+        width: 10px;
+        height: 160px;
+        border-radius: 10px;
+        background: linear-gradient(180deg, #e5e7eb, #d1d5db);
+        box-shadow: inset 0 0 0 1px #cbd5e1, 0 2px 6px rgba(0,0,0,0.08);
+      }
+      .zoom-slider .knob {
+        position: absolute;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        width: 16px;
+        height: 16px;
+        border-radius: 50%;
+        background: #2563eb;
+        box-shadow: 0 2px 6px rgba(0,0,0,0.18);
+        cursor: ns-resize;
+        transition: background 120ms ease;
+      }
+      .zoom-slider .knob:hover { background: #1d4ed8; }
+
+      /* 响应式：屏幕较窄时缩放整体并收紧滑条间距 */
+      @media (max-width: 480px) {
+        .image-box { width: 90vw; height: calc(90vw * 9 / 16); }
+        .zoom-slider { right: calc(100% + 14px); height: 140px; }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <input type="text" class="title-input" aria-label="页面标题" placeholder="SeeLayer 官网" />
+      <div class="stack">
+        <!-- 三个图片框 -->
+        <div class="box-wrapper">
+          <div class="zoom-slider" aria-label="缩放控制" data-min="1" data-max="3">
+            <div class="knob" role="slider" aria-valuemin="1" aria-valuemax="3" aria-valuenow="1"></div>
+          </div>
+          <div class="image-box" tabindex="0">
+            <input id="file-1" class="file-input" type="file" accept="image/png, image/jpeg, image/jpg, image/webp" />
+            <div class="hint">上传图片 < 10MB（PNG / JPG / JPEG / WebP）</div>
+            <div class="viewport"><img alt="" /></div>
+            <div class="overlay"></div>
+            <div class="status" hidden></div>
+          </div>
+          <div class="text-panel" aria-label="文字输入面板"><textarea class="tp-input" aria-live="polite"></textarea></div>
+          <div class="seq-bar" aria-label="序列条"></div>
+          <div class="actions"><button class="btn adjust" type="button">调整图片</button><button class="btn replace" type="button">新增/替换</button><button class="btn delete" type="button" disabled>删除</button></div>
+        </div>
+
+        <div class="box-wrapper">
+          <div class="zoom-slider" aria-label="缩放控制" data-min="1" data-max="3">
+            <div class="knob" role="slider" aria-valuemin="1" aria-valuemax="3" aria-valuenow="1"></div>
+          </div>
+          <div class="image-box" tabindex="0">
+            <input id="file-2" class="file-input" type="file" accept="image/png, image/jpeg, image/jpg, image/webp" />
+            <div class="hint">上传图片 < 10MB（PNG / JPG / JPEG / WebP）</div>
+            <div class="viewport"><img alt="" /></div>
+            <div class="overlay"></div>
+            <div class="status" hidden></div>
+          </div>
+          <div class="text-panel" aria-label="文字输入面板"><textarea class="tp-input" aria-live="polite"></textarea></div>
+          <div class="seq-bar" aria-label="序列条"></div>
+          <div class="actions"><button class="btn adjust" type="button">调整图片</button><button class="btn replace" type="button">新增/替换</button><button class="btn delete" type="button" disabled>删除</button></div>
+        </div>
+
+        <div class="box-wrapper">
+          <div class="zoom-slider" aria-label="缩放控制" data-min="1" data-max="3">
+            <div class="knob" role="slider" aria-valuemin="1" aria-valuemax="3" aria-valuenow="1"></div>
+          </div>
+          <div class="image-box" tabindex="0">
+            <input id="file-3" class="file-input" type="file" accept="image/png, image/jpeg, image/jpg, image/webp" />
+            <div class="hint">上传图片 < 10MB（PNG / JPG / JPEG / WebP）</div>
+            <div class="viewport"><img alt="" /></div>
+            <div class="overlay"></div>
+            <div class="status" hidden></div>
+          </div>
+          <div class="text-panel" aria-label="文字输入面板"><textarea class="tp-input" aria-live="polite"></textarea></div>
+          <div class="seq-bar" aria-label="序列条"></div>
+          <div class="actions"><button class="btn adjust" type="button">调整图片</button><button class="btn replace" type="button">新增/替换</button><button class="btn delete" type="button" disabled>删除</button></div>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      /* 配置：文件大小与允许类型 */
+      const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
+      const ALLOWED_TYPES = new Set(["image/png", "image/jpeg", "image/jpg", "image/webp"]);
+
+      /* 工具函数：文本提示 */
+      function showStatus(el, text, type = "info") {
+        el.textContent = text;
+        el.hidden = false;
+        el.classList.remove('info', 'success', 'error');
+        el.classList.add(type);
+        clearTimeout(el.__timer);
+        el.__timer = setTimeout(() => { el.hidden = true; }, 1800);
+      }
+
+      /* 图片框组件：独立管理上传、缩放、平移 */
+      class ImageBox {
+        constructor(boxWrapper) {
+          this.wrapper = boxWrapper;
+          this.slider = boxWrapper.querySelector('.zoom-slider');
+          this.knob = this.slider.querySelector('.knob');
+          this.box = boxWrapper.querySelector('.image-box');
+          this.fileInput = this.box.querySelector('.file-input');
+          this.hint = this.box.querySelector('.hint');
+          this.viewport = this.box.querySelector('.viewport');
+          this.img = this.viewport.querySelector('img');
+          this.status = this.box.querySelector('.status');
+          this.deleteBtn = this.wrapper.querySelector('.actions .delete');
+          this.replaceBtn = this.wrapper.querySelector('.actions .replace');
+          this.adjustBtn = this.wrapper.querySelector('.actions .adjust');
+          this.overlay = this.box.querySelector('.overlay');
+          this.marks = [];
+          this.adjustMode = false;
+          this.sliderLocked = true;
+          this.textPanel = this.wrapper.querySelector('.text-panel');
+          this.tpInput = this.wrapper.querySelector('.tp-input');
+          this.seqBar = this.wrapper.querySelector('.seq-bar');
+          this.textStore = new Map();
+          this.textAreas = new Map();
+          this.boxIndex = Array.from(document.querySelectorAll('.box-wrapper')).indexOf(this.wrapper);
+
+          // 状态：原图尺寸、基础适配比例、用户缩放比例与平移偏移
+          this.nw = 0; this.nh = 0; // natural width/height
+          this.baseScale = 1; // 适配容器的基础比例
+          this.userScale = 1; // 1~3 范围内的用户缩放倍数
+          this.tx = 0; this.ty = 0; // 平移偏移（以中心为基准）
+          this.dragging = false; this.lastX = 0; this.lastY = 0;
+          this.frameRequested = false;
+          this.mode = 'fitted';
+
+          // 绑定交互
+          this._bindUpload();
+          this._bindZoomSlider();
+          this._bindPan();
+          this._bindWheel();
+          this._bindActions();
+          this._updateButtonsState();
+          this._bindOverlay();
+          this._bindAdjust();
+          this._updateAdjustButtonState();
+          this._bindContextMenuBlock();
+          this._bindTextPanel();
+          this._layoutSidePanels();
+          window.addEventListener('resize', () => this._layoutSidePanels());
+          if (window.ResizeObserver) {
+            this._resizeObserver = new ResizeObserver(() => this._layoutSidePanels());
+            this._resizeObserver.observe(this.box);
+          }
+          this._loadTextStore();
+        }
+
+        _bindUpload() {
+          // 上传逻辑保持不变，仅改变触发方式到“新增/替换”按钮
+
+          // 处理文件选择
+          this.fileInput.addEventListener('change', (e) => {
+            const file = e.target.files && e.target.files[0];
+            if (!file) return;
+
+            // 类型与大小校验
+            if (!ALLOWED_TYPES.has(file.type)) {
+              showStatus(this.status, '不支持的图片格式', 'error');
+              return;
+            }
+            if (file.size > MAX_FILE_SIZE) {
+              showStatus(this.status, '图片文件过大（＜10MB）', 'error');
+              return;
+            }
+
+            showStatus(this.status, '加载中…');
+            const reader = new FileReader();
+            reader.onload = () => {
+              this.img.src = reader.result;
+            };
+            reader.onerror = () => {
+              showStatus(this.status, '上传失败', 'error');
+            };
+            reader.readAsDataURL(file);
+          });
+
+          // 图片加载完成后，计算基础缩放并复位状态（始终使用 transform 表达）
+          this.img.addEventListener('load', () => {
+            this.nw = this.img.naturalWidth;
+            this.nh = this.img.naturalHeight;
+
+            const { width: cw, height: ch } = this.box.getBoundingClientRect();
+            this.baseScale = Math.min(cw / this.nw, ch / this.nh);
+            this.userScale = 1;
+            this.tx = 0; this.ty = 0;
+            const sw = this.nw * this.baseScale;
+            const sh = this.nh * this.baseScale;
+            const centerTx = (cw - sw) / 2;
+            const centerTy = (ch - sh) / 2;
+            this.img.style.transform = `translate3d(${centerTx}px, ${centerTy}px, 0) scale(${this.baseScale})`;
+            this._updateSliderByScale();
+            this.hint.style.display = 'none';
+            this._updateButtonsState();
+            showStatus(this.status, '上传成功', 'success');
+            this.adjustMode = true;
+            this.sliderLocked = false;
+            if (this.overlay) this.overlay.style.pointerEvents = 'none';
+            this._updateAdjustButtonState();
+          });
+        }
+
+        _bindZoomSlider() {
+          const min = Number(this.slider.dataset.min || 1);
+          const max = Number(this.slider.dataset.max || 3);
+
+          const trackHeight = this.slider.clientHeight;
+          const knobHeight = this.knob.clientHeight;
+
+          const posFromScale = (s) => {
+            // s in [min, max] -> y in [trackHeight - knobHeight/2, knobHeight/2]
+            const t = (s - min) / (max - min); // 0~1
+            const y = (1 - t) * (trackHeight - knobHeight) + knobHeight / 2;
+            return y;
+          };
+
+          const scaleFromPos = (y) => {
+            const clampedY = Math.max(knobHeight / 2, Math.min(trackHeight - knobHeight / 2, y));
+            const t = 1 - (clampedY - knobHeight / 2) / (trackHeight - knobHeight);
+            const s = min + t * (max - min);
+            return s;
+          };
+
+          const placeKnob = (y) => {
+            this.knob.style.top = `${y}px`;
+            this.knob.setAttribute('aria-valuenow', String(this.userScale));
+          };
+
+          // 初始化 knob 位置
+          placeKnob(posFromScale(this.userScale));
+
+          let sliding = false;
+          const onPointerDown = (e) => {
+            sliding = true;
+            this.knob.setPointerCapture?.(e.pointerId);
+            if (this.sliderLocked) {
+              showStatus(this.status, '请点击 锁定状态', 'success');
+              sliding = false;
+              return;
+            }
+            move(e);
+          };
+          const onPointerUp = () => { sliding = false; };
+          const move = (e) => {
+            if (!sliding) return;
+            if (this.sliderLocked) return;
+            const rect = this.slider.getBoundingClientRect();
+            const y = e.clientY - rect.top;
+            this.userScale = Number(scaleFromPos(y).toFixed(2));
+            placeKnob(posFromScale(this.userScale));
+            if (this.userScale === 1) { this.tx = 0; this.ty = 0; }
+            this._updateTransform();
+          };
+
+          this.knob.addEventListener('pointerdown', onPointerDown);
+          window.addEventListener('pointerup', onPointerUp);
+          window.addEventListener('pointermove', move);
+
+          // 点击滑条快速定位
+          this.slider.addEventListener('pointerdown', (e) => {
+            const rect = this.slider.getBoundingClientRect();
+            const y = e.clientY - rect.top;
+            if (this.sliderLocked) {
+              showStatus(this.status, '请点击 锁定状态', 'success');
+              return;
+            }
+            this.userScale = Number(scaleFromPos(y).toFixed(2));
+            placeKnob(posFromScale(this.userScale));
+            if (this.userScale === 1) { this.tx = 0; this.ty = 0; }
+            this._updateTransform();
+          });
+        }
+
+        _bindPan() {
+          const onDown = (e) => {
+            if (!this.img.src) return;
+            if (!this.adjustMode && this.userScale <= 1) return;
+            this.dragging = true;
+            this.lastX = e.clientX;
+            this.lastY = e.clientY;
+            this.box.style.cursor = 'grabbing';
+          };
+          const onMove = (e) => {
+            if (!this.dragging) return;
+            const dx = e.clientX - this.lastX;
+            const dy = e.clientY - this.lastY;
+            this.lastX = e.clientX;
+            this.lastY = e.clientY;
+            this.tx += dx;
+            this.ty += dy;
+            if (!this.frameRequested) {
+              this.frameRequested = true;
+              requestAnimationFrame(() => {
+                this._applyClampedTransform();
+                this.frameRequested = false;
+              });
+            }
+          };
+          const onUp = () => {
+            this.dragging = false;
+            this.box.style.cursor = 'pointer';
+          };
+
+          // 鼠标
+          this.viewport.addEventListener('mousedown', onDown);
+          window.addEventListener('mousemove', onMove);
+          window.addEventListener('mouseup', onUp);
+
+          // 触摸
+          this.viewport.addEventListener('touchstart', (e) => {
+            if (!this.img.src) return;
+            const t = e.touches[0];
+            this.dragging = true;
+            this.lastX = t.clientX; this.lastY = t.clientY;
+          }, { passive: true });
+          this.viewport.addEventListener('touchmove', (e) => {
+            if (!this.dragging) return;
+            const t = e.touches[0];
+            const dx = t.clientX - this.lastX;
+            const dy = t.clientY - this.lastY;
+            this.lastX = t.clientX; this.lastY = t.clientY;
+            this.tx += dx; this.ty += dy;
+            if (!this.frameRequested) {
+              this.frameRequested = true;
+              requestAnimationFrame(() => {
+                this._applyClampedTransform();
+                this.frameRequested = false;
+              });
+            }
+          }, { passive: true });
+          this.viewport.addEventListener('touchend', () => { this.dragging = false; }, { passive: true });
+        }
+
+        _bindWheel() {
+          const min = Number(this.slider.dataset.min || 1);
+          const max = Number(this.slider.dataset.max || 3);
+          this.box.addEventListener('wheel', (e) => {
+            if (!this.img.src) return;
+            e.preventDefault();
+            if (this.sliderLocked) {
+              showStatus(this.status, '请点击 锁定状态', 'success');
+              return;
+            }
+            const rect = this.box.getBoundingClientRect();
+            const px = e.clientX - rect.left;
+            const py = e.clientY - rect.top;
+            const prevUserScale = this.userScale;
+            const prevScale = this.baseScale * prevUserScale;
+            let nextUserScale = prevUserScale + (-e.deltaY) * 0.001 * (max - min);
+            nextUserScale = Math.max(min, Math.min(max, Number(nextUserScale.toFixed(2))));
+            if (nextUserScale === prevUserScale) return;
+            if (nextUserScale === 1) { this.tx = 0; this.ty = 0; }
+            const newScale = this.baseScale * nextUserScale;
+            const centerTx = (rect.width - this.nw * prevScale) / 2;
+            const centerTy = (rect.height - this.nh * prevScale) / 2;
+            const imgX = (px - centerTx - this.tx) / prevScale;
+            const imgY = (py - centerTy - this.ty) / prevScale;
+            this.tx += imgX * (prevScale - newScale);
+            this.ty += imgY * (prevScale - newScale);
+            this.userScale = nextUserScale;
+            this._updateSliderByScale();
+            this._updateTransform();
+          }, { passive: false });
+        }
+
+        _bindActions() {
+          if (this.deleteBtn) {
+            this.deleteBtn.addEventListener('click', () => {
+              if (!this.img.src) return;
+              this.img.src = '';
+              this.nw = 0; this.nh = 0;
+              this.userScale = 1;
+              this.tx = 0; this.ty = 0;
+              this.img.style.transform = '';
+              this.hint.style.display = '';
+              this._updateSliderByScale();
+              this._updateButtonsState();
+              showStatus(this.status, '已清除', 'success');
+            });
+          }
+          if (this.replaceBtn) {
+            this.replaceBtn.addEventListener('click', () => {
+              if (!this.fileInput) return;
+              this.fileInput.click();
+            });
+          }
+        }
+
+        _updateButtonsState() {
+          const hasImg = !!this.img.src;
+          if (this.deleteBtn) this.deleteBtn.disabled = !hasImg;
+          if (this.replaceBtn) this.replaceBtn.disabled = false;
+        }
+
+        _bindOverlay() {
+          if (!this.overlay) return;
+          this.overlay.addEventListener('dblclick', (e) => {
+            const rect = this.overlay.getBoundingClientRect();
+            const x = e.clientX - rect.left;
+            const y = e.clientY - rect.top;
+            if (this.overlay.querySelectorAll('.mark').length >= 8) {
+              const prev = this.status.style.transition;
+              this.status.style.transition = 'opacity 300ms ease';
+              showStatus(this.status, '数量已达上限', 'error');
+              setTimeout(() => { this.status.style.transition = prev || 'opacity 160ms ease'; }, 350);
+              return;
+            }
+            this._createMark(x, y, true);
+          });
+        }
+
+        _bindAdjust() {
+          if (!this.adjustBtn) return;
+          this.adjustBtn.addEventListener('click', () => {
+            this.adjustMode = !this.adjustMode;
+            this.sliderLocked = !this.adjustMode;
+            if (this.overlay) this.overlay.style.pointerEvents = this.adjustMode ? 'none' : 'auto';
+            this.box.style.cursor = this.adjustMode ? 'grab' : 'pointer';
+            this._updateAdjustButtonState(true);
+          });
+        }
+
+        _updateAdjustButtonState(pulse = false) {
+          if (!this.adjustBtn) return;
+          if (this.adjustMode) {
+            this.adjustBtn.textContent = '调整图片';
+            this.adjustBtn.classList.add('active');
+            this.adjustBtn.classList.remove('locked');
+            this.adjustBtn.setAttribute('aria-pressed', 'true');
+            this.adjustBtn.setAttribute('aria-label', '进入图片调整模式');
+          } else {
+            this.adjustBtn.textContent = '锁定状态';
+            this.adjustBtn.classList.add('locked');
+            this.adjustBtn.classList.remove('active');
+            this.adjustBtn.setAttribute('aria-pressed', 'false');
+            this.adjustBtn.setAttribute('aria-label', '锁定状态，启用圆点交互');
+          }
+          if (pulse) {
+            this.adjustBtn.style.transform = 'scale(0.98)';
+            setTimeout(() => { this.adjustBtn.style.transform = 'scale(1)'; }, 140);
+          }
+        }
+
+        _bindContextMenuBlock() {
+          const block = (e) => { e.preventDefault(); e.stopPropagation(); };
+          this.box.addEventListener('contextmenu', block);
+          if (this.overlay) this.overlay.addEventListener('contextmenu', block);
+          if (this.viewport) this.viewport.addEventListener('contextmenu', block);
+        }
+
+        _bindTextPanel() { /* no-op: removed counter logic */ }
+
+        _layoutSidePanels() {
+          if (!this.textPanel || !this.seqBar) return;
+          const rect = this.box.getBoundingClientRect();
+          const width = Math.round(rect.width * 0.5);
+          const height = Math.round(rect.height);
+          this.textPanel.style.left = `${rect.width + 20}px`;
+          this.textPanel.style.top = `0px`;
+          this.textPanel.style.width = `${width}px`;
+          this.textPanel.style.height = `${height}px`;
+          this.seqBar.style.left = `${rect.width + 20 + width}px`;
+          this.seqBar.style.top = `0px`;
+          this.seqBar.style.height = `${height}px`;
+          this._syncSequence(0);
+        }
+
+        _syncSequence(attempt) {
+          if (!this.seqBar) return;
+          const overlayMarks = Array.from(this.overlay.querySelectorAll('.mark'));
+          const seqMarks = Array.from(this.seqBar.querySelectorAll('.seq-mark'));
+          if (seqMarks.length !== overlayMarks.length) {
+            this.seqBar.innerHTML = '';
+            overlayMarks.forEach((m) => {
+              const sm = document.createElement('div');
+              sm.className = 'seq-mark';
+              const id = Number(m.dataset.id);
+              sm.textContent = String(id);
+              sm.dataset.id = String(id);
+              sm.addEventListener('click', () => {
+                this._selectMarkById(id);
+              });
+              this.seqBar.appendChild(sm);
+            });
+          }
+          setTimeout(() => {
+            this._syncSelectedToSeq();
+            if (attempt < 3) {
+              const ok = this.seqBar.querySelectorAll('.seq-mark').length === this.overlay.querySelectorAll('.mark').length;
+              if (!ok) this._syncSequence(attempt + 1);
+            }
+          }, 50);
+        }
+
+        _syncSelectedToSeq() {
+          const overlayMarks = Array.from(this.overlay.querySelectorAll('.mark'));
+          const selMark = overlayMarks.find(m => m.classList.contains('selected'));
+          const selId = selMark ? Number(selMark.dataset.id) : -1;
+          const seqMarks = Array.from(this.seqBar.querySelectorAll('.seq-mark'));
+          seqMarks.forEach((m) => {
+            if (Number(m.dataset.id) === selId) m.classList.add('selected'); else m.classList.remove('selected');
+          });
+        }
+
+        _selectMarkById(id) {
+          const target = Array.from(this.overlay.querySelectorAll('.mark')).find(m => Number(m.dataset.id) === id);
+          if (target) {
+            this._highlightDeletionMark(target);
+            this._showTextForId(id);
+            this._syncSelectedToSeq();
+          }
+        }
+
+        _reindexMarks() {
+          const els = Array.from(this.overlay.querySelectorAll('.mark'));
+          const oldStore = new Map(this.textStore);
+          const newStore = new Map();
+          const newAreas = new Map();
+          els.forEach((el, idx) => {
+            const newId = idx + 1;
+            const oldId = Number(el.dataset.id);
+            el.dataset.id = String(newId);
+            const numEl = el.querySelector('.num');
+            if (numEl) numEl.textContent = String(newId);
+            newStore.set(newId, oldStore.get(oldId) || '');
+            const ta = this.textAreas.get(oldId);
+            if (ta) { ta.dataset.id = String(newId); newAreas.set(newId, ta); }
+          });
+          this.textStore = newStore;
+          this.textAreas = newAreas;
+          this.marks = this.marks.map((m, idx) => ({ x: m.x, y: m.y, id: idx + 1 }));
+          this.nextId = els.length + 1;
+          const sel = els.find(m => m.classList.contains('selected'));
+          if (sel) this._showTextForId(Number(sel.dataset.id));
+          this._syncSequence(0);
+          this._syncSelectedToSeq();
+        }
+
+        _createMark(x, y, select) {
+          const m = document.createElement('div');
+          m.className = 'mark';
+          m.style.left = `${Math.max(0, Math.min(this.overlay.clientWidth - 20, x - 10))}px`;
+          m.style.top = `${Math.max(0, Math.min(this.overlay.clientHeight - 20, y - 10))}px`;
+          const nextId = (this.nextId || 1);
+          if (this.overlay.querySelectorAll('.mark').length >= 8 || nextId > 8) {
+            const prev = this.status.style.transition;
+            this.status.style.transition = 'opacity 300ms ease';
+            showStatus(this.status, '数量已达上限', 'error');
+            setTimeout(() => { this.status.style.transition = prev || 'opacity 160ms ease'; }, 350);
+            return;
+          }
+          m.dataset.id = String(nextId);
+          const num = document.createElement('span');
+          num.className = 'num';
+          num.textContent = String(nextId);
+          m.appendChild(num);
+          this.overlay.appendChild(m);
+          this.marks.push({ x: parseFloat(m.style.left) + 10, y: parseFloat(m.style.top) + 10, id: nextId });
+          this._ensureTextAreaForId(nextId);
+          this.nextId = nextId + 1;
+          if (select) {
+            this._highlightDeletionMark(m);
+            this._showTextForId(nextId);
+          }
+          this._syncSequence(0);
+          // 左键单击与释放后保持高亮
+          m.addEventListener('click', (e) => {
+            e.stopPropagation();
+            this._highlightDeletionMark(m);
+            const id = Number(m.dataset.id);
+            this._showTextForId(id);
+            m.classList.add('click-anim');
+            setTimeout(() => m.classList.remove('click-anim'), 200);
+            this._syncSelectedToSeq();
+          });
+          m.addEventListener('contextmenu', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            try {
+              this._highlightDeletionMark(m);
+              this._showDeletePopover(m);
+            } catch {}
+          });
+          // 移动端长按触发删除
+          let lpTimer = null;
+          m.addEventListener('touchstart', () => {
+            lpTimer = setTimeout(() => {
+              this._highlightDeletionMark(m);
+              this._showDeletePopover(m);
+            }, 500);
+          }, { passive: true });
+          m.addEventListener('touchend', () => { if (lpTimer) { clearTimeout(lpTimer); lpTimer = null; } }, { passive: true });
+          m.addEventListener('touchcancel', () => { if (lpTimer) { clearTimeout(lpTimer); lpTimer = null; } }, { passive: true });
+          let dragging = false; let sx = 0; let sy = 0; let startLeft = 0; let startTop = 0;
+          m.addEventListener('mousedown', (e) => {
+            if (e.button !== 0) return;
+            dragging = true;
+            sx = e.clientX; sy = e.clientY;
+            startLeft = parseFloat(m.style.left) || 0;
+            startTop = parseFloat(m.style.top) || 0;
+            window.addEventListener('mousemove', dragMove);
+            window.addEventListener('mouseup', dragEnd, { once: true });
+          });
+          const dragMove = (e) => {
+            if (!dragging) return;
+            const nx = startLeft + (e.clientX - sx);
+            const ny = startTop + (e.clientY - sy);
+            const clampedX = Math.max(0, Math.min(this.overlay.clientWidth - 20, nx));
+            const clampedY = Math.max(0, Math.min(this.overlay.clientHeight - 20, ny));
+            m.style.left = `${clampedX}px`;
+            m.style.top = `${clampedY}px`;
+            const idx = Array.from(this.overlay.querySelectorAll('.mark')).indexOf(m);
+            if (idx >= 0) this.marks[idx] = { x: clampedX + 10, y: clampedY + 10 };
+          };
+          const dragEnd = () => { dragging = false; window.removeEventListener('mousemove', dragMove); this._syncSequence(0); };
+        }
+
+        _ensureTextAreaForId(id) {
+          if (!this.textPanel) return;
+          if (this.textAreas.has(id)) return;
+          const ta = document.createElement('textarea');
+          ta.className = 'tp-input tp-item';
+          ta.style.position = 'absolute';
+          ta.style.inset = '0';
+          ta.dataset.id = String(id);
+          ta.value = this.textStore.get(id) || '';
+          ta.style.display = 'none';
+          this.textPanel.appendChild(ta);
+          this.textAreas.set(id, ta);
+          ta.addEventListener('input', () => {
+            this.textStore.set(id, ta.value);
+            this._persistTextStore();
+          });
+        }
+
+        _showTextForId(id) {
+          if (!this.textPanel) return;
+          this.textAreas.forEach((el, key) => { el.style.display = key === id ? 'block' : 'none'; });
+          const el = this.textAreas.get(id);
+          if (el) el.focus({ preventScroll: true });
+        }
+
+        _persistTextStore() {
+          try {
+            const key = `textStore-${this.boxIndex}`;
+            const obj = {};
+            this.textStore.forEach((v, k) => { obj[k] = v; });
+            localStorage.setItem(key, JSON.stringify(obj));
+          } catch {}
+        }
+
+        _loadTextStore() {
+          try {
+            const key = `textStore-${this.boxIndex}`;
+            const raw = localStorage.getItem(key);
+            if (!raw) return;
+            const obj = JSON.parse(raw);
+            Object.keys(obj).forEach(k => this.textStore.set(Number(k), obj[k]));
+          } catch {}
+        }
+
+        _highlightDeletionMark(target) {
+          this.overlay.querySelectorAll('.mark').forEach(el => el.classList.remove('selected'));
+          if (target) target.classList.add('selected');
+        }
+
+        _showDeletePopover(target) {
+          const existing = this.overlay.querySelector('.popover');
+          if (existing) existing.remove();
+          const pop = document.createElement('div');
+          pop.className = 'popover';
+          const confirm = document.createElement('button');
+          confirm.className = 'pop-btn confirm';
+          confirm.textContent = '删除';
+          pop.appendChild(confirm);
+          const left = parseFloat(target.style.left) || 0;
+          const top = parseFloat(target.style.top) || 0;
+          const above = top > 28;
+          pop.style.left = `${left}px`;
+          pop.style.top = `${top + (above ? -28 : 28)}px`;
+          const outside = (ev) => {
+            if (!pop.contains(ev.target)) {
+              pop.remove();
+              document.removeEventListener('click', outside, true);
+              // 外部点击仅关闭气泡，保持当前高亮状态直至下一次交互
+            }
+          };
+          document.addEventListener('click', outside, true);
+          confirm.addEventListener('click', () => {
+            const idx = Array.from(this.overlay.querySelectorAll('.mark')).indexOf(target);
+            const id = Number(target.dataset.id);
+            target.remove();
+            if (idx >= 0) this.marks.splice(idx, 1);
+            const ta = this.textAreas.get(id);
+            if (ta) { ta.remove(); this.textAreas.delete(id); }
+            this.textStore.delete(id);
+            this._persistTextStore();
+            pop.remove();
+            document.removeEventListener('click', outside, true);
+            // 删除后取消所有高亮
+            this.overlay.querySelectorAll('.mark').forEach(el => el.classList.remove('selected'));
+            try { this._reindexMarks(); } catch { try { this._syncSequence(0); } catch {} }
+          });
+          this.overlay.appendChild(pop);
+        }
+
+        getMarksJSON() {
+          return JSON.stringify(this.marks);
+        }
+
+        setMarksFromJSON(json) {
+          try {
+            const arr = JSON.parse(json);
+            this.overlay.querySelectorAll('.mark').forEach(el => el.remove());
+            this.marks = [];
+            arr.slice(0, 8).forEach((p, i) => {
+              this._createMark(p.x, p.y, i === arr.length - 1);
+            });
+          } catch {}
+        }
+
+        
+
+        _updateSliderByScale() {
+          // 当图片加载或重置时，同步滑块位置
+          const trackHeight = this.slider.clientHeight;
+          const knobHeight = this.knob.clientHeight;
+          const min = Number(this.slider.dataset.min || 1);
+          const max = Number(this.slider.dataset.max || 3);
+          const t = (this.userScale - min) / (max - min);
+          const y = (1 - t) * (trackHeight - knobHeight) + knobHeight / 2;
+          this.knob.style.top = `${y}px`;
+          this.knob.setAttribute('aria-valuenow', String(this.userScale));
+        }
+
+        _updateTransform() {
+          // 根据当前缩放与平移，更新图片变换（中心为原点）
+          const { width: cw, height: ch } = this.box.getBoundingClientRect();
+          const scale = this.baseScale * this.userScale;
+          const sw = this.nw * scale;
+          const sh = this.nh * scale;
+          const centerTx = (cw - sw) / 2;
+          const centerTy = (ch - sh) / 2;
+          const finalX = centerTx + this.tx;
+          const finalY = centerTy + this.ty;
+          this.img.style.transform = `translate3d(${finalX}px, ${finalY}px, 0) scale(${scale})`;
+          this._applyClampedTransform();
+        }
+
+        _applyClampedTransform() {
+          // 边界限制：避免图片过度移出可视区域（左上角为变换原点）
+          const { width: cw, height: ch } = this.box.getBoundingClientRect();
+          const scale = this.baseScale * this.userScale;
+          const sw = this.nw * scale;
+          const sh = this.nh * scale;
+          const centerTx = (cw - sw) / 2;
+          const centerTy = (ch - sh) / 2;
+
+          const buffer = 12;
+          let minX, maxX, minY, maxY;
+          if (sw <= cw) { minX = maxX = centerTx; } else { minX = cw - sw - buffer; maxX = buffer; }
+          if (sh <= ch) { minY = maxY = centerTy; } else { minY = ch - sh - buffer; maxY = buffer; }
+
+          let finalX = centerTx + this.tx;
+          let finalY = centerTy + this.ty;
+          finalX = Math.max(minX, Math.min(maxX, finalX));
+          finalY = Math.max(minY, Math.min(maxY, finalY));
+          this.tx = finalX - centerTx;
+          this.ty = finalY - centerTy;
+
+          this.img.style.transform = `translate(${finalX}px, ${finalY}px) scale(${scale})`;
+        }
+      }
+
+      /* 初始化三个图片框实例 */
+      document.querySelectorAll('.box-wrapper').forEach((bw) => new ImageBox(bw));
+
+      function layoutTitle() {
+        const t = document.querySelector('.title-input');
+        if (!t) return;
+        const firstBox = document.querySelector('.box-wrapper .image-box');
+        if (firstBox) {
+          const w = Math.round(firstBox.getBoundingClientRect().width);
+          t.style.width = w + 'px';
+        }
+      }
+      layoutTitle();
+      window.addEventListener('resize', layoutTitle);
+
+      const titleInput = document.querySelector('.title-input');
+      if (titleInput) {
+        titleInput.addEventListener('focus', function() {
+          this.dataset.ph = this.dataset.ph || this.placeholder;
+          this.placeholder = '';
+        });
+        titleInput.addEventListener('blur', function() {
+          if (!this.value.trim()) this.placeholder = this.dataset.ph || 'SeeLayer 官网';
+        });
+      }
+    </script>
+  </body>
+</html>

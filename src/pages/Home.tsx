@@ -2,14 +2,18 @@ import { useEffect, useRef } from 'react'
 import Header from '../components/Header'
 import Footer from '../components/Footer'
 import Carousel from '../components/Carousel'
+import ImageBox from '../components/ImageBox'
 import { 
   scrollFadeInUp, 
   staggerFadeInUp, 
-  scrollFadeIn, 
   scrollScaleIn,
   hover3DTilt,
   cleanupScrollTriggers 
 } from '../utils/animations'
+import { gsap } from 'gsap'
+import { ScrollTrigger } from 'gsap/ScrollTrigger'
+
+gsap.registerPlugin(ScrollTrigger)
 
 const Home = () => {
   const featuresSectionRef = useRef<HTMLDivElement>(null)
@@ -18,6 +22,10 @@ const Home = () => {
   const mainSectionRef = useRef<HTMLDivElement>(null)
   const features2SectionRef = useRef<HTMLDivElement>(null)
   const features2CardsRef = useRef<HTMLDivElement[]>([])
+  const casesSectionRef = useRef<HTMLDivElement>(null)
+  const casesTitleRef = useRef<HTMLHeadingElement>(null)
+  const casesCardsRef = useRef<HTMLDivElement[]>([])
+  const numberRefs = useRef<HTMLSpanElement[]>([])
 
   useEffect(() => {
     // Handle anchor links
@@ -89,6 +97,55 @@ const Home = () => {
           }
         })
       }
+
+      // Cases Section 标题
+      if (casesTitleRef.current) {
+        scrollFadeInUp(casesTitleRef.current)
+      }
+
+      // Cases Section 卡片 - 使用交错缩放动画
+      const casesCards = casesCardsRef.current.filter(Boolean)
+      if (casesCards.length > 0) {
+        staggerFadeInUp(casesCards, 0.15)
+        // 为卡片添加3D倾斜效果
+        casesCards.forEach((card) => {
+          if (card) {
+            const cleanup = hover3DTilt(card)
+            if (cleanup) {
+              cleanupFunctions.push(cleanup)
+            }
+          }
+        })
+      }
+
+      // 数字递增动画
+      const numberElements = numberRefs.current.filter(Boolean)
+      numberElements.forEach((element, index) => {
+        if (element) {
+          const targetNumber = parseInt(element.getAttribute('data-target') || '0')
+          const duration = 2
+          const delay = index * 0.2
+          const obj = { value: 0 }
+          
+          gsap.to(obj, {
+            value: targetNumber,
+            duration: duration,
+            delay: delay,
+            ease: 'power2.out',
+            scrollTrigger: {
+              trigger: element,
+              start: 'top 85%',
+              toggleActions: 'play none none reverse',
+            },
+            onUpdate: function() {
+              const currentValue = Math.floor(obj.value)
+              if (element) {
+                element.textContent = currentValue.toString().padStart(2, '0')
+              }
+            },
+          })
+        }
+      })
     }, 100)
 
     return () => {
@@ -181,6 +238,64 @@ const Home = () => {
     },
   ]
 
+  const cases = [
+    {
+      id: 1,
+      number: '01',
+      title: '设计师的 AI 工具应用',
+      description: '通过 SeeLayer 半透明教程，设计师可以边看边操作，无需频繁切换窗口，大大提升学习效率和工作流程。',
+      image: '/images/1.png',
+      category: '设计工具',
+    },
+    {
+      id: 2,
+      number: '02',
+      title: '猎头的销售视频制作',
+      description: '利用 SeeLayer 的穿透功能，猎头可以制作不遮挡界面的销售演示视频，让客户更清晰地了解产品特性。',
+      image: '/images/2.png',
+      category: '销售工具',
+    },
+    {
+      id: 3,
+      number: '03',
+      title: '教师的地图讲解应用',
+      description: '教师使用 SeeLayer 进行地图讲解，文字标记可以实时跟随鼠标移动，让地理教学更加生动直观。',
+      image: '/images/3.png',
+      category: '教育工具',
+    },
+    {
+      id: 4,
+      number: '04',
+      title: '程序员的开发工具演示',
+      description: '程序员通过 SeeLayer 制作开发工具教程，鼠标穿透功能确保不影响实际操作，提升技术分享效果。',
+      image: '/images/4.png',
+      category: '开发工具',
+    },
+    {
+      id: 5,
+      number: '05',
+      title: '秘书的商务工具应用',
+      description: '秘书使用 SeeLayer 制作商务工具操作指南，实时更新功能确保教程始终与最新版本同步。',
+      image: '/images/5.png',
+      category: '办公工具',
+    },
+    {
+      id: 6,
+      number: '06',
+      title: '企业内训系统集成',
+      description: '企业将 SeeLayer 集成到内训系统，员工可以快速学习新工具，减少培训成本，提升工作效率。',
+      image: '/images/img1.jpg',
+      category: '企业应用',
+    },
+  ]
+
+  const stats = [
+    { label: '成功案例', value: 128, suffix: '+' },
+    { label: '服务企业', value: 56, suffix: '+' },
+    { label: '用户满意度', value: 98, suffix: '%' },
+    { label: '覆盖行业', value: 12, suffix: '+' },
+  ]
+
   return (
     <div className="min-h-screen w-full max-w-full overflow-x-hidden" style={{ backgroundColor: '#EFEFE9' }}>
       <Header showHero={true} />
@@ -232,7 +347,7 @@ const Home = () => {
       <section id="main" ref={mainSectionRef} className="py-20 bg-white scroll-mt-20 my-5 opacity-0">
         <div className="container mx-auto px-4 text-center">
           <h2 className="text-4xl md:text-5xl font-bold text-gray-900 mb-4">
-            案例汇聚 操作文档
+             操作文档
           </h2>
           <p className="text-xl text-gray-600 max-w-3xl mx-auto">
             鲜有领导意识到，公司内部缺少学习机制很多工具，员工需要花很大精力去了解如何操作，如何嵌入现有的工作流我们要自己
@@ -241,10 +356,110 @@ const Home = () => {
         </div>
       </section>
 
+      {/* Image Boxes Section - 从 HTML 文件提取的功能 */}
+      <section className="py-20 bg-gradient-to-b from-gray-50 to-white my-5">
+        <div className="container mx-auto px-4">
+          <div className="max-w-6xl mx-auto">
+            <div className="flex flex-col gap-16">
+              {[1, 2, 3].map((boxIndex) => (
+                <ImageBox key={boxIndex} />
+              ))}
+            </div>
+          </div>
+        </div>
+      </section>
+
       {/* Carousel */}
-      <div className="my-5">
+      {/* <div className="my-5">
         <Carousel items={carouselItems} />
-      </div>
+      </div> */}
+
+      {/* Cases Section - 案例汇聚 */}
+      <section id="cases" ref={casesSectionRef} className="py-20 bg-gradient-to-b from-white to-gray-50 scroll-mt-20 my-5">
+        <div className="container mx-auto px-4">
+          <div className="text-center mb-16">
+            <h2 ref={casesTitleRef} className="text-4xl md:text-5xl font-bold text-gray-900 mb-4 opacity-0">
+              案例汇聚
+            </h2>
+            <p className="text-xl text-gray-600 max-w-3xl mx-auto">
+              汇聚各行业成功应用案例，展示 SeeLayer 在不同场景下的创新应用
+            </p>
+          </div>
+
+          {/* Statistics */}
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-6 mb-16">
+            {stats.map((stat, index) => (
+              <div
+                key={index}
+                className="bg-white rounded-xl shadow-md p-6 text-center hover:shadow-xl transition-all duration-300 transform hover:-translate-y-1"
+              >
+                <div className="mb-2">
+                  <span
+                    ref={(el) => {
+                      if (el) {
+                        numberRefs.current[index] = el
+                        el.setAttribute('data-target', stat.value.toString())
+                      }
+                    }}
+                    className="text-4xl md:text-5xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent"
+                  >
+                    00
+                  </span>
+                  <span className="text-2xl md:text-3xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
+                    {stat.suffix}
+                  </span>
+                </div>
+                <p className="text-gray-600 text-sm md:text-base font-medium">{stat.label}</p>
+              </div>
+            ))}
+          </div>
+
+          {/* Cases Grid */}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+            {cases.map((caseItem, index) => (
+              <div
+                key={caseItem.id}
+                ref={(el) => {
+                  if (el) casesCardsRef.current[index] = el
+                }}
+                className="bg-white rounded-2xl shadow-lg overflow-hidden hover:shadow-2xl transition-all duration-300 transform hover:-translate-y-2 opacity-0 group"
+                style={{ transformStyle: 'preserve-3d', perspective: '1000px' }}
+              >
+                <div className="relative h-48 overflow-hidden">
+                  <img
+                    src={caseItem.image}
+                    alt={caseItem.title}
+                    className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500"
+                  />
+                  <div className="absolute top-4 left-4 bg-white/90 backdrop-blur-sm px-3 py-1 rounded-full">
+                    <span className="text-sm font-bold text-blue-600">{caseItem.number}</span>
+                  </div>
+                  <div className="absolute top-4 right-4 bg-blue-600/90 backdrop-blur-sm px-3 py-1 rounded-full">
+                    <span className="text-xs font-semibold text-white">{caseItem.category}</span>
+                  </div>
+                  <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
+                </div>
+                <div className="p-6">
+                  <div className="flex items-center mb-3">
+                    <span className="text-3xl font-bold text-gray-300 mr-3">{caseItem.number}</span>
+                    <h3 className="text-xl font-bold text-gray-900 flex-1">
+                      {caseItem.title}
+                    </h3>
+                  </div>
+                  <p className="text-gray-600 leading-relaxed">
+                    {caseItem.description}
+                  </p>
+                  <div className="mt-4 pt-4 border-t border-gray-200">
+                    <span className="inline-block px-3 py-1 bg-blue-50 text-blue-600 text-xs font-semibold rounded-full">
+                      {caseItem.category}
+                    </span>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
 
       {/* Features2 Section */}
       <section id="features2" ref={features2SectionRef} className="py-20 bg-white scroll-mt-20 mt-5">
