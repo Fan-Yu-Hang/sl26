@@ -359,11 +359,11 @@ const Home = () => {
       {/* Image Boxes Section - 从 HTML 文件提取的功能 */}
       <section className="py-20 bg-gradient-to-b from-gray-50 to-white my-5">
         <div className="container mx-auto px-4">
-          <div className="max-w-6xl mx-auto">
+          <div className="max-w-4xl mx-auto">
             <div className="flex flex-col gap-16">
-              {[1, 2, 3].map((boxIndex) => (
-                <ImageBox key={boxIndex} />
-              ))}
+              {/* {[1, 2, 3].map((boxIndex) => ( */}
+                <ImageBox key={1} />
+              {/* ))} */}
             </div>
           </div>
         </div>

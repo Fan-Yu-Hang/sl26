@@ -1,144 +1,268 @@
-import { useState, useRef } from 'react'
+import { useState, useRef, useEffect } from 'react'
+
+interface Mark {
+    id: number
+    x: number
+    y: number
+}
+
+const MAX_FILE_SIZE = 10 * 1024 * 1024 // 10MB
+const ALLOWED_TYPES = ['image/png', 'image/jpeg', 'image/jpg', 'image/webp']
 
 const ImageBox = () => {
+    // 状态管理
     const [imageSrc, setImageSrc] = useState<string>('')
-    const [marks, setMarks] = useState<Array<{ id: number; x: number; y: number }>>([])
+    const [marks, setMarks] = useState<Mark[]>([])
     const [selectedMarkId, setSelectedMarkId] = useState<number | null>(null)
     const [userScale, setUserScale] = useState(1)
     const [adjustMode, setAdjustMode] = useState(false)
+    const [sliderLocked, setSliderLocked] = useState(true)
     const [textStore, setTextStore] = useState<Map<number, string>>(new Map())
     const [currentTextId, setCurrentTextId] = useState<number | null>(null)
+    const [status, setStatus] = useState<{ text: string; type: 'info' | 'success' | 'error'; visible: boolean }>({
+        text: '',
+        type: 'info',
+        visible: false,
+    })
 
+    // Refs
     const fileInputRef = useRef<HTMLInputElement>(null)
     const imageBoxRef = useRef<HTMLDivElement>(null)
     const imageRef = useRef<HTMLImageElement>(null)
     const overlayRef = useRef<HTMLDivElement>(null)
     const sliderRef = useRef<HTMLDivElement>(null)
     const knobRef = useRef<HTMLDivElement>(null)
-    const nextIdRef = useRef<number>(1)
+    const viewportRef = useRef<HTMLDivElement>(null)
+    const textPanelRef = useRef<HTMLDivElement>(null)
+    const seqBarRef = useRef<HTMLDivElement>(null)
 
-    const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-        const file = e.target.files?.[0]
-        if (!file) {
-            console.log('没有选择文件')
-            return
-        }
+    // 图片状态
+    const nwRef = useRef(0) // natural width
+    const nhRef = useRef(0) // natural height
+    const baseScaleRef = useRef(1)
+    const txRef = useRef(0) // translate x
+    const tyRef = useRef(0) // translate y
+    const nextIdRef = useRef(1)
+    const boxIndexRef = useRef(0)
 
-        console.log('选择的文件:', file.name, file.type, file.size)
+  // 拖拽状态
+  const isDraggingRef = useRef(false)
+  const isPanningRef = useRef(false)
+  const isMarkDraggingRef = useRef(false)
+  const isPinchingRef = useRef(false)
+  const lastXRef = useRef(0)
+  const lastYRef = useRef(0)
+  const lastDistanceRef = useRef(0)
+  const lastScaleRef = useRef(1)
+  const frameRequestedRef = useRef(false)
 
-        // 检查文件类型
-        const allowedTypes = ['image/png', 'image/jpeg', 'image/jpg', 'image/webp']
-        if (!allowedTypes.includes(file.type)) {
-            alert(`不支持的图片格式: ${file.type}\n支持的格式: PNG, JPG, JPEG, WebP`)
-            // 重置文件输入
-            if (fileInputRef.current) {
-                fileInputRef.current.value = ''
-            }
-            return
-        }
-
-        // 检查文件大小
-        if (file.size > 10 * 1024 * 1024) {
-            alert(`图片文件过大: ${(file.size / 1024 / 1024).toFixed(2)}MB\n最大支持: 10MB`)
-            // 重置文件输入
-            if (fileInputRef.current) {
-                fileInputRef.current.value = ''
-            }
-            return
-        }
-
-        console.log('开始读取文件...')
-        const reader = new FileReader()
-        reader.onload = () => {
-            console.log('文件读取成功')
-            setImageSrc(reader.result as string)
-            setAdjustMode(true)
-            setMarks([])
-            nextIdRef.current = 1
-        }
-        reader.onerror = () => {
-            console.error('文件读取失败')
-            alert('文件读取失败，请重试')
-            // 重置文件输入
-            if (fileInputRef.current) {
-                fileInputRef.current.value = ''
-            }
-        }
-        reader.readAsDataURL(file)
+    // 工具函数：显示状态提示
+    const showStatus = (text: string, type: 'info' | 'success' | 'error' = 'info') => {
+        setStatus({ text, type, visible: true })
+        setTimeout(() => {
+            setStatus(prev => ({ ...prev, visible: false }))
+        }, 1800)
     }
 
-    const handleDoubleClick = (e: React.MouseEvent<HTMLDivElement>) => {
-        if (!imageBoxRef.current || marks.length >= 8) {
-            alert('数量已达上限')
-            return
-        }
+  // 文件上传处理
+  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+
+    if (!ALLOWED_TYPES.includes(file.type)) {
+      showStatus('不支持的图片格式', 'error')
+      if (fileInputRef.current) fileInputRef.current.value = ''
+      return
+    }
+
+    if (file.size > MAX_FILE_SIZE) {
+      showStatus('图片文件过大（＜10MB）', 'error')
+      if (fileInputRef.current) fileInputRef.current.value = ''
+      return
+    }
+
+    showStatus('加载中…', 'info')
+    const reader = new FileReader()
+    reader.onload = () => {
+      const result = reader.result as string
+      setImageSrc(result)
+    }
+    reader.onerror = () => {
+      showStatus('上传失败', 'error')
+      if (fileInputRef.current) fileInputRef.current.value = ''
+    }
+    reader.readAsDataURL(file)
+  }
+
+  // 图片加载完成处理
+  useEffect(() => {
+    const img = imageRef.current
+    if (!img || !imageSrc) return
+
+    const handleLoad = () => {
+      if (!img.naturalWidth || !img.naturalHeight) return
+      
+      nwRef.current = img.naturalWidth
+      nhRef.current = img.naturalHeight
+
+      if (!imageBoxRef.current) return
+      const rect = imageBoxRef.current.getBoundingClientRect()
+      const cw = rect.width
+      const ch = rect.height
+
+      baseScaleRef.current = Math.min(cw / nwRef.current, ch / nhRef.current)
+      setUserScale(1)
+      txRef.current = 0
+      tyRef.current = 0
+
+      const sw = nwRef.current * baseScaleRef.current
+      const sh = nhRef.current * baseScaleRef.current
+      const centerTx = (cw - sw) / 2
+      const centerTy = (ch - sh) / 2
+
+      img.style.transform = `translate3d(${centerTx}px, ${centerTy}px, 0) scale(${baseScaleRef.current})`
+      updateSliderByScale()
+      setAdjustMode(true)
+      setSliderLocked(false)
+      // 保留已有的标记点，不清空
+      // setMarks([]) - 已移除，保留标记点
+      // nextIdRef.current = 1 - 已移除，保留当前ID序列
+      showStatus('上传成功', 'success')
+      if (overlayRef.current) {
+        overlayRef.current.style.pointerEvents = 'none'
+      }
+    }
+
+    // 如果图片已经加载完成
+    if (img.complete && img.naturalWidth > 0 && img.naturalHeight > 0) {
+      // 使用 setTimeout 确保 DOM 已更新
+      setTimeout(handleLoad, 0)
+    } else {
+      img.addEventListener('load', handleLoad)
+      return () => img.removeEventListener('load', handleLoad)
+    }
+  }, [imageSrc])
+
+    // 更新滑条位置
+    const updateSliderByScale = () => {
+        if (!sliderRef.current || !knobRef.current) return
+        const trackHeight = 160
+        const knobHeight = 16
+        const min = 1
+        const max = 3
+        const t = (userScale - min) / (max - min)
+        const y = (1 - t) * (trackHeight - knobHeight) + knobHeight / 2
+        knobRef.current.style.top = `${y}px`
+    }
+
+    // 更新图片变换
+    const updateTransform = () => {
+        if (!imageBoxRef.current || !imageRef.current || !imageSrc) return
+
         const rect = imageBoxRef.current.getBoundingClientRect()
-        const x = e.clientX - rect.left
-        const y = e.clientY - rect.top
-        const newMark = {
-            id: nextIdRef.current++,
-            x: Math.max(10, Math.min(rect.width - 10, x - 10)),
-            y: Math.max(10, Math.min(rect.height - 10, y - 10)),
+        const cw = rect.width
+        const ch = rect.height
+        const scale = baseScaleRef.current * userScale
+        const sw = nwRef.current * scale
+        const sh = nhRef.current * scale
+        const centerTx = (cw - sw) / 2
+        const centerTy = (ch - sh) / 2
+        const finalX = centerTx + txRef.current
+        const finalY = centerTy + tyRef.current
+
+        imageRef.current.style.transform = `translate3d(${finalX}px, ${finalY}px, 0) scale(${scale})`
+        applyClampedTransform()
+    }
+
+    // 应用边界限制的变换
+    const applyClampedTransform = () => {
+        if (!imageBoxRef.current || !imageRef.current || !imageSrc) return
+
+        const rect = imageBoxRef.current.getBoundingClientRect()
+        const cw = rect.width
+        const ch = rect.height
+        const scale = baseScaleRef.current * userScale
+        const sw = nwRef.current * scale
+        const sh = nhRef.current * scale
+        const centerTx = (cw - sw) / 2
+        const centerTy = (ch - sh) / 2
+
+        const buffer = 12
+        let minX, maxX, minY, maxY
+        if (sw <= cw) {
+            minX = maxX = centerTx
+        } else {
+            minX = cw - sw - buffer
+            maxX = buffer
         }
-        setMarks([...marks, newMark])
-        setSelectedMarkId(newMark.id)
-        setCurrentTextId(newMark.id)
+        if (sh <= ch) {
+            minY = maxY = centerTy
+        } else {
+            minY = ch - sh - buffer
+            maxY = buffer
+        }
+
+        let finalX = centerTx + txRef.current
+        let finalY = centerTy + tyRef.current
+        finalX = Math.max(minX, Math.min(maxX, finalX))
+        finalY = Math.max(minY, Math.min(maxY, finalY))
+        txRef.current = finalX - centerTx
+        tyRef.current = finalY - centerTy
+
+        if (imageRef.current) {
+            imageRef.current.style.transform = `translate(${finalX}px, ${finalY}px) scale(${scale})`
+        }
     }
 
-    const handleMarkClick = (id: number) => {
-        setSelectedMarkId(id)
-        setCurrentTextId(id)
-    }
+    // 当 userScale 或 adjustMode 改变时更新变换
+    useEffect(() => {
+        if (imageSrc) {
+            updateTransform()
+            updateSliderByScale()
+        }
+    }, [userScale, imageSrc])
 
-    const handleDeleteMark = (id: number) => {
-        const newMarks = marks.filter(m => m.id !== id).map((m, idx) => ({
-            ...m,
-            id: idx + 1,
-        }))
-        setMarks(newMarks)
-        setSelectedMarkId(null)
-        setCurrentTextId(null)
-        nextIdRef.current = newMarks.length + 1
-        // 重新索引文本存储
-        const newTextStore = new Map<number, string>()
-        marks.forEach((m, idx) => {
-            if (m.id !== id && textStore.has(m.id)) {
-                newTextStore.set(idx + 1, textStore.get(m.id)!)
-            }
-        })
-        setTextStore(newTextStore)
-    }
-
-    const isDraggingRef = useRef(false)
-
-    const updateScaleFromPosition = (clientY: number) => {
-        if (!sliderRef.current) return
-        
-        const rect = sliderRef.current.getBoundingClientRect()
-        const y = clientY - rect.top
+    // 缩放滑条处理
+    const scaleFromPos = (y: number) => {
         const trackHeight = 160
         const knobHeight = 16
         const min = 1
         const max = 3
         const clampedY = Math.max(knobHeight / 2, Math.min(trackHeight - knobHeight / 2, y))
         const t = 1 - (clampedY - knobHeight / 2) / (trackHeight - knobHeight)
-        const scale = min + t * (max - min)
-        setUserScale(Number(scale.toFixed(2)))
+        return min + t * (max - min)
     }
 
     const handleSliderMouseDown = (e: React.MouseEvent<HTMLDivElement>) => {
-        if (!adjustMode) {
-            alert('请先点击"锁定模式"按钮启用调整模式')
+        if (sliderLocked) {
+            showStatus('请点击"调整图片"按钮启用调整模式', 'info')
             return
         }
         e.preventDefault()
         e.stopPropagation()
         isDraggingRef.current = true
-        updateScaleFromPosition(e.clientY)
+
+        if (sliderRef.current) {
+            const rect = sliderRef.current.getBoundingClientRect()
+            const y = e.clientY - rect.top
+            const newScale = scaleFromPos(y)
+            setUserScale(Number(newScale.toFixed(2)))
+            if (newScale === 1) {
+                txRef.current = 0
+                tyRef.current = 0
+            }
+        }
 
         const handleMouseMove = (e: MouseEvent) => {
-            if (!isDraggingRef.current) return
-            updateScaleFromPosition(e.clientY)
+            if (!isDraggingRef.current || !sliderRef.current) return
+            const rect = sliderRef.current.getBoundingClientRect()
+            const y = e.clientY - rect.top
+            const newScale = scaleFromPos(y)
+            setUserScale(Number(newScale.toFixed(2)))
+            if (newScale === 1) {
+                txRef.current = 0
+                tyRef.current = 0
+            }
         }
 
         const handleMouseUp = () => {
@@ -150,6 +274,343 @@ const ImageBox = () => {
         window.addEventListener('mousemove', handleMouseMove)
         window.addEventListener('mouseup', handleMouseUp)
     }
+
+    // 图片平移处理
+    // 计算两点之间的距离
+    const getDistance = (touch1: { clientX: number; clientY: number }, touch2: { clientX: number; clientY: number }) => {
+        const dx = touch1.clientX - touch2.clientX
+        const dy = touch1.clientY - touch2.clientY
+        return Math.sqrt(dx * dx + dy * dy)
+    }
+
+    const handlePanStart = (e: React.MouseEvent | React.TouchEvent) => {
+        if (!imageSrc) return
+        
+        // 触摸事件：检查是否是双指操作
+        if ('touches' in e && e.touches.length === 2) {
+            if (sliderLocked) {
+                showStatus('请点击"调整图片"按钮启用调整模式', 'info')
+                return
+            }
+            isPinchingRef.current = true
+            isPanningRef.current = false
+            const distance = getDistance(e.touches[0], e.touches[1])
+            lastDistanceRef.current = distance
+            lastScaleRef.current = userScale
+            return
+        }
+        
+        // 单指或鼠标：平移操作
+        if (!adjustMode && userScale <= 1) return
+        isPanningRef.current = true
+        isPinchingRef.current = false
+        const clientX = 'touches' in e ? e.touches[0].clientX : e.clientX
+        const clientY = 'touches' in e ? e.touches[0].clientY : e.clientY
+        lastXRef.current = clientX
+        lastYRef.current = clientY
+        if (imageBoxRef.current) {
+            imageBoxRef.current.style.cursor = 'grabbing'
+        }
+    }
+
+    const handlePanMove = (e: MouseEvent | TouchEvent) => {
+        // 双指缩放
+        if ('touches' in e && e.touches.length === 2 && isPinchingRef.current) {
+            if (!imageBoxRef.current || sliderLocked) return
+            
+            const distance = getDistance(e.touches[0], e.touches[1])
+            const scaleChange = distance / lastDistanceRef.current
+            let newScale = lastScaleRef.current * scaleChange
+            
+            const min = 1
+            const max = 3
+            newScale = Math.max(min, Math.min(max, Number(newScale.toFixed(2))))
+            
+            if (newScale !== userScale) {
+                const rect = imageBoxRef.current.getBoundingClientRect()
+                const centerX = (e.touches[0].clientX + e.touches[1].clientX) / 2 - rect.left
+                const centerY = (e.touches[0].clientY + e.touches[1].clientY) / 2 - rect.top
+                
+                const prevScale = baseScaleRef.current * userScale
+                const newScaleValue = baseScaleRef.current * newScale
+                
+                const centerTx = (rect.width - nwRef.current * prevScale) / 2
+                const centerTy = (rect.height - nhRef.current * prevScale) / 2
+                const imgX = (centerX - centerTx - txRef.current) / prevScale
+                const imgY = (centerY - centerTy - tyRef.current) / prevScale
+                
+                txRef.current += imgX * (prevScale - newScaleValue)
+                tyRef.current += imgY * (prevScale - newScaleValue)
+                
+                if (newScale === 1) {
+                    txRef.current = 0
+                    tyRef.current = 0
+                }
+                
+                setUserScale(newScale)
+            }
+            return
+        }
+        
+        // 单指平移
+        if (!isPanningRef.current) return
+        const clientX = 'touches' in e ? e.touches[0].clientX : e.clientX
+        const clientY = 'touches' in e ? e.touches[0].clientY : e.clientY
+        const dx = clientX - lastXRef.current
+        const dy = clientY - lastYRef.current
+        lastXRef.current = clientX
+        lastYRef.current = clientY
+        txRef.current += dx
+        tyRef.current += dy
+
+        if (!frameRequestedRef.current) {
+            frameRequestedRef.current = true
+            requestAnimationFrame(() => {
+                applyClampedTransform()
+                frameRequestedRef.current = false
+            })
+        }
+    }
+
+    const handlePanEnd = () => {
+        isPanningRef.current = false
+        isPinchingRef.current = false
+        lastDistanceRef.current = 0
+        if (imageBoxRef.current) {
+            imageBoxRef.current.style.cursor = adjustMode ? 'grab' : 'pointer'
+        }
+    }
+
+    useEffect(() => {
+        const viewport = viewportRef.current
+        if (!viewport) return
+
+        const handleMouseMove = (e: MouseEvent) => handlePanMove(e)
+        const handleMouseUp = () => handlePanEnd()
+        const handleTouchMove = (e: TouchEvent) => {
+            handlePanMove(e)
+            // 双指操作时阻止默认行为
+            if (e.touches.length === 2) {
+                e.preventDefault()
+            }
+        }
+        const handleTouchEnd = () => handlePanEnd()
+
+        viewport.addEventListener('mousemove', handleMouseMove)
+        window.addEventListener('mouseup', handleMouseUp)
+        viewport.addEventListener('touchmove', handleTouchMove, { passive: false })
+        viewport.addEventListener('touchend', handleTouchEnd, { passive: true })
+        viewport.addEventListener('touchcancel', handleTouchEnd, { passive: true })
+
+        return () => {
+            viewport.removeEventListener('mousemove', handleMouseMove)
+            window.removeEventListener('mouseup', handleMouseUp)
+            viewport.removeEventListener('touchmove', handleTouchMove)
+            viewport.removeEventListener('touchend', handleTouchEnd)
+        }
+    }, [adjustMode, userScale, imageSrc])
+
+    // 鼠标滚轮缩放
+    const handleWheel = (e: React.WheelEvent) => {
+        if (!imageSrc || sliderLocked) {
+            if (sliderLocked) {
+                showStatus('请点击"调整图片"按钮启用调整模式', 'info')
+            }
+            return
+        }
+        e.preventDefault()
+        e.stopPropagation()
+
+        if (!imageBoxRef.current) return
+        const rect = imageBoxRef.current.getBoundingClientRect()
+        const px = e.clientX - rect.left
+        const py = e.clientY - rect.top
+        const prevUserScale = userScale
+        const prevScale = baseScaleRef.current * prevUserScale
+        const min = 1
+        const max = 3
+        let nextUserScale = prevUserScale + (-e.deltaY) * 0.001 * (max - min)
+        nextUserScale = Math.max(min, Math.min(max, Number(nextUserScale.toFixed(2))))
+        if (nextUserScale === prevUserScale) return
+        if (nextUserScale === 1) {
+            txRef.current = 0
+            tyRef.current = 0
+        }
+
+        const newScale = baseScaleRef.current * nextUserScale
+        const centerTx = (rect.width - nwRef.current * prevScale) / 2
+        const centerTy = (rect.height - nhRef.current * prevScale) / 2
+        const imgX = (px - centerTx - txRef.current) / prevScale
+        const imgY = (py - centerTy - tyRef.current) / prevScale
+        txRef.current += imgX * (prevScale - newScale)
+        tyRef.current += imgY * (prevScale - newScale)
+        setUserScale(nextUserScale)
+    }
+
+    // 双击添加标记点
+    const handleDoubleClick = (e: React.MouseEvent<HTMLDivElement>) => {
+        if (!imageBoxRef.current || marks.length >= 8) {
+            showStatus('数量已达上限', 'error')
+            return
+        }
+        const rect = imageBoxRef.current.getBoundingClientRect()
+        const x = e.clientX - rect.left
+        const y = e.clientY - rect.top
+        const newMark: Mark = {
+            id: nextIdRef.current++,
+            x: Math.max(10, Math.min(rect.width - 10, x - 10)),
+            y: Math.max(10, Math.min(rect.height - 10, y - 10)),
+        }
+        setMarks([...marks, newMark])
+        setSelectedMarkId(newMark.id)
+        setCurrentTextId(newMark.id)
+        ensureTextAreaForId(newMark.id)
+        syncSequence()
+    }
+
+    // 标记点点击
+    const handleMarkClick = (id: number) => {
+        setSelectedMarkId(id)
+        setCurrentTextId(id)
+    }
+
+    // 标记点删除
+    const handleDeleteMark = (id: number) => {
+        const newMarks = marks.filter(m => m.id !== id).map((m, idx) => ({
+            ...m,
+            id: idx + 1,
+        }))
+        setMarks(newMarks)
+        setSelectedMarkId(null)
+        setCurrentTextId(null)
+        nextIdRef.current = newMarks.length + 1
+
+        // 重新索引文本存储
+        const newTextStore = new Map<number, string>()
+        marks.forEach((m, idx) => {
+            if (m.id !== id && textStore.has(m.id)) {
+                newTextStore.set(idx + 1, textStore.get(m.id)!)
+            }
+        })
+        setTextStore(newTextStore)
+        syncSequence()
+    }
+
+    // 标记点拖拽
+    const handleMarkDragStart = (e: React.MouseEvent, markId: number) => {
+        if (e.button !== 0) return
+        isMarkDraggingRef.current = true
+        const mark = marks.find(m => m.id === markId)
+        if (!mark || !imageBoxRef.current) return
+
+        const startX = e.clientX
+        const startY = e.clientY
+        const startLeft = mark.x
+        const startTop = mark.y
+
+        const handleDragMove = (e: MouseEvent) => {
+            if (!isMarkDraggingRef.current || !imageBoxRef.current) return
+            const nx = startLeft + (e.clientX - startX)
+            const ny = startTop + (e.clientY - startY)
+            const rect = imageBoxRef.current.getBoundingClientRect()
+            const clampedX = Math.max(0, Math.min(rect.width - 20, nx))
+            const clampedY = Math.max(0, Math.min(rect.height - 20, ny))
+
+            const updatedMarks = marks.map(m =>
+                m.id === markId ? { ...m, x: clampedX, y: clampedY } : m
+            )
+            setMarks(updatedMarks)
+        }
+
+        const handleDragEnd = () => {
+            isMarkDraggingRef.current = false
+            window.removeEventListener('mousemove', handleDragMove)
+            window.removeEventListener('mouseup', handleDragEnd)
+            syncSequence()
+        }
+
+        window.addEventListener('mousemove', handleDragMove)
+        window.addEventListener('mouseup', handleDragEnd, { once: true })
+    }
+
+    // 确保文字区域存在
+    const ensureTextAreaForId = (id: number) => {
+        if (textStore.has(id)) return
+        const newStore = new Map(textStore)
+        newStore.set(id, '')
+        setTextStore(newStore)
+    }
+
+    // 同步序列条
+    const syncSequence = () => {
+        // 序列条会通过 marks 状态自动更新
+    }
+
+    // 调整模式切换
+    const handleAdjustToggle = () => {
+        const newAdjustMode = !adjustMode
+        setAdjustMode(newAdjustMode)
+        setSliderLocked(!newAdjustMode)
+        if (overlayRef.current) {
+            overlayRef.current.style.pointerEvents = newAdjustMode ? 'none' : 'auto'
+        }
+        if (imageBoxRef.current) {
+            imageBoxRef.current.style.cursor = newAdjustMode ? 'grab' : 'pointer'
+        }
+    }
+
+    // 删除图片
+    const handleDelete = () => {
+        if (!imageSrc) return
+        if (imageRef.current) {
+            imageRef.current.src = ''
+            imageRef.current.style.transform = ''
+        }
+        setImageSrc('')
+        setMarks([])
+        setSelectedMarkId(null)
+        setCurrentTextId(null)
+        setTextStore(new Map())
+        setUserScale(1)
+        txRef.current = 0
+        tyRef.current = 0
+        nextIdRef.current = 1
+        setAdjustMode(false)
+        setSliderLocked(true)
+        showStatus('已清除', 'success')
+    }
+
+    // localStorage 存储和加载
+    useEffect(() => {
+        const key = `textStore-${boxIndexRef.current}`
+        try {
+            const stored = localStorage.getItem(key)
+            if (stored) {
+                const obj = JSON.parse(stored)
+                const newStore = new Map<number, string>()
+                Object.keys(obj).forEach(k => {
+                    newStore.set(Number(k), obj[k])
+                })
+                setTextStore(newStore)
+            }
+        } catch (e) {
+            console.error('Failed to load text store:', e)
+        }
+    }, [])
+
+    useEffect(() => {
+        const key = `textStore-${boxIndexRef.current}`
+        try {
+            const obj: Record<string, string> = {}
+            textStore.forEach((v, k) => {
+                obj[k.toString()] = v
+            })
+            localStorage.setItem(key, JSON.stringify(obj))
+        } catch (e) {
+            console.error('Failed to save text store:', e)
+        }
+    }, [textStore])
+
 
     return (
         <div className="relative flex flex-col items-center w-full">
@@ -164,9 +625,17 @@ const ImageBox = () => {
                         style={{ transform: 'translateY(-50%)', top: '50%' }}
                         onMouseDown={handleSliderMouseDown}
                         onClick={(e) => {
-                            // 点击滑条轨道也可以调整
-                            if (adjustMode) {
-                                updateScaleFromPosition(e.clientY)
+                            if (!sliderLocked) {
+                                const rect = sliderRef.current?.getBoundingClientRect()
+                                if (rect) {
+                                    const y = e.clientY - rect.top
+                                    const newScale = scaleFromPos(y)
+                                    setUserScale(Number(newScale.toFixed(2)))
+                                    if (newScale === 1) {
+                                        txRef.current = 0
+                                        tyRef.current = 0
+                                    }
+                                }
                             }
                         }}
                     >
@@ -174,7 +643,7 @@ const ImageBox = () => {
                             ref={knobRef}
                             className="absolute left-1/2 w-4 h-4 rounded-full bg-blue-600 shadow-lg cursor-ns-resize hover:bg-blue-700 transition-colors"
                             style={{
-                                transform: `translate(-50%, -50%)`,
+                                transform: 'translate(-50%, -50%)',
                                 top: `${(1 - (userScale - 1) / 2) * 100}%`,
                             }}
                             onMouseDown={(e) => {
@@ -189,33 +658,55 @@ const ImageBox = () => {
                         ref={imageBoxRef}
                         className="relative w-full md:w-96 h-56 bg-gradient-to-b from-white to-gray-100 border border-gray-200 rounded-lg shadow-md overflow-hidden cursor-pointer hover:shadow-lg transition-shadow"
                         onDoubleClick={handleDoubleClick}
+                        onWheel={handleWheel}
+                        style={{ cursor: adjustMode ? 'grab' : 'pointer' }}
                     >
-                {!imageSrc ? (
-                    <div
-                        className="absolute inset-0 flex items-center justify-center bg-gray-50/55 backdrop-blur-sm text-gray-600 text-sm hover:bg-gray-100/75 transition-colors cursor-pointer"
-                        onClick={(e) => {
-                            e.stopPropagation()
-                            fileInputRef.current?.click()
-                        }}
-                    >
-                        点击上传图片 &lt; 10MB（PNG / JPG / JPEG / WebP）
-                    </div>
-                ) : (
-                    <>
-                        <div className="absolute inset-0 flex items-center justify-center">
-                            <img
-                                ref={imageRef}
-                                src={imageSrc}
-                                alt=""
-                                className="max-w-none max-h-none select-none pointer-events-auto"
-                                style={{
-                                    transform: `scale(${userScale})`,
-                                    transformOrigin: 'center center',
-                                }}
-                            />
+                        {/* 提示文字（无图片时显示） */}
+                        {!imageSrc && (
+                                    <div className="absolute inset-0 flex items-center justify-center bg-gray-50/55 backdrop-blur-sm text-gray-600 text-sm user-select-none pointer-events-none z-0">
+                                上传图片 &lt; 10MB（PNG / JPG / JPEG / WebP）
+                            </div>
+                        )}
+
+                        {/* Viewport */}
+                        <div
+                            ref={viewportRef}
+                            className="absolute inset-0 flex items-center justify-center pointer-events-auto"
+                            onMouseDown={imageSrc ? handlePanStart : undefined}
+                            onTouchStart={imageSrc ? (e) => {
+                                handlePanStart(e)
+                                // 双指操作时阻止默认行为（防止页面缩放）
+                                if (e.touches.length === 2) {
+                                    e.preventDefault()
+                                }
+                            } : undefined}
+                        >
+                            {imageSrc && (
+                                <img
+                                    ref={imageRef}
+                                    src={imageSrc}
+                                    alt=""
+                                    className="max-w-none max-h-none select-none pointer-events-auto"
+                                    style={{
+                                        transformOrigin: 'top left',
+                                        transition: 'transform 380ms cubic-bezier(0.22, 1, 0.36, 1)',
+                                        willChange: 'transform',
+                                        backfaceVisibility: 'hidden',
+                                        WebkitUserSelect: 'none',
+                                        userSelect: 'none',
+                                        WebkitUserDrag: 'none',
+                                        userDrag: 'none',
+                                    }}
+                                />
+                            )}
                         </div>
-                        {/* 标记点覆盖层 */}
-                        <div ref={overlayRef} className="absolute inset-0 pointer-events-none">
+
+                        {/* 标记点覆盖层 - 始终显示 */}
+                        <div
+                            ref={overlayRef}
+                            className="absolute inset-0 pointer-events-none z-10"
+                            style={{ pointerEvents: adjustMode ? 'none' : 'auto' }}
+                        >
                             {marks.map((mark) => (
                                 <div
                                     key={mark.id}
@@ -227,11 +718,18 @@ const ImageBox = () => {
                                         left: `${mark.x}px`,
                                         top: `${mark.y}px`,
                                         transform: 'translate(-50%, -50%)',
-                                        pointerEvents: adjustMode ? 'none' : 'auto',
                                     }}
-                                    onClick={() => handleMarkClick(mark.id)}
+                                    onClick={(e) => {
+                                        e.stopPropagation()
+                                        handleMarkClick(mark.id)
+                                    }}
+                                    onMouseDown={(e) => {
+                                        e.stopPropagation()
+                                        handleMarkDragStart(e, mark.id)
+                                    }}
                                     onContextMenu={(e) => {
                                         e.preventDefault()
+                                        e.stopPropagation()
                                         if (confirm('确定要删除这个标记吗？')) {
                                             handleDeleteMark(mark.id)
                                         }
@@ -246,8 +744,20 @@ const ImageBox = () => {
                                 </div>
                             ))}
                         </div>
-                    </>
-                )}
+
+                        {/* 状态提示 */}
+                        {status.visible && (
+                            <div
+                                className={`absolute left-2.5 bottom-2.5 px-2.5 py-1.5 text-xs font-semibold rounded-lg text-white shadow-md backdrop-blur-sm z-20 ${status.type === 'info'
+                                        ? 'bg-gray-700/90'
+                                        : status.type === 'success'
+                                            ? 'bg-teal-700/90'
+                                            : 'bg-red-700/90'
+                                    }`}
+                            >
+                                {status.text}
+                            </div>
+                        )}
                         <input
                             ref={fileInputRef}
                             type="file"
@@ -257,14 +767,14 @@ const ImageBox = () => {
                         />
                     </div>
 
-                    {/* 操作按钮 - 放在图片框下面 */}
+                    {/* 操作按钮 */}
                     <div className="flex gap-2 mt-4 w-full justify-center">
                         <button
                             className={`px-4 py-2 rounded text-sm font-medium transition-all ${adjustMode
                                     ? 'bg-green-500 text-white border border-green-500'
-                                    : 'bg-gray-200 text-gray-700 border border-gray-300'
+                                    : 'bg-gray-400 text-white border border-gray-400'
                                 }`}
-                            onClick={() => setAdjustMode(!adjustMode)}
+                            onClick={handleAdjustToggle}
                         >
                             {adjustMode ? '调整图片' : '锁定状态'}
                         </button>
@@ -276,14 +786,7 @@ const ImageBox = () => {
                         </button>
                         <button
                             className="px-4 py-2 rounded text-sm font-medium bg-white text-red-600 border border-red-600 hover:bg-red-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                            onClick={() => {
-                                setImageSrc('')
-                                setMarks([])
-                                setSelectedMarkId(null)
-                                setCurrentTextId(null)
-                                setTextStore(new Map())
-                                nextIdRef.current = 1
-                            }}
+                            onClick={handleDelete}
                             disabled={!imageSrc}
                         >
                             删除
@@ -292,10 +795,14 @@ const ImageBox = () => {
                 </div>
 
                 {/* 右侧：文字面板和序列条 */}
-                <div className="flex gap-5 flex-1 w-full md:w-auto mt-4 md:mt-0">
-                    <div className="flex-1 min-w-0">
+                <div className="flex gap-5 flex-1 w-full md:w-auto mt-4 md:mt-0 relative">
+                    <div
+                        ref={textPanelRef}
+                        className="flex-1 min-w-0"
+                        style={{ height: '224px' }}
+                    >
                         <textarea
-                            className="w-full h-56 border border-gray-300 rounded-lg p-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent resize-none"
+                            className="w-full h-full border border-gray-300 rounded-lg p-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent resize-none"
                             placeholder={currentTextId ? `输入标记 ${currentTextId} 的文字说明...` : '选择一个标记点来输入文字说明'}
                             value={currentTextId ? (textStore.get(currentTextId) || '') : ''}
                             onChange={(e) => {
@@ -308,7 +815,11 @@ const ImageBox = () => {
                             disabled={!currentTextId}
                         />
                     </div>
-                    <div className="w-8 flex flex-col gap-1 overflow-y-auto max-h-56 flex-shrink-0">
+                    <div
+                        ref={seqBarRef}
+                        className="w-8 flex flex-col gap-1 overflow-y-auto flex-shrink-0"
+                        style={{ height: '224px' }}
+                    >
                         {marks.map((mark) => (
                             <div
                                 key={mark.id}
@@ -329,4 +840,3 @@ const ImageBox = () => {
 }
 
 export default ImageBox
-
