@@ -661,20 +661,20 @@ const ImageBox = () => {
 
     // localStorage 存储和加载
     useEffect(() => {
-        const key = `textStore-${boxIndexRef.current}`
-        try {
-            const stored = localStorage.getItem(key)
-            if (stored) {
-                const obj = JSON.parse(stored)
-                const newStore = new Map<number, string>()
-                Object.keys(obj).forEach(k => {
-                    newStore.set(Number(k), obj[k])
-                })
-                setTextStore(newStore)
-            }
-        } catch (e) {
-            console.error('Failed to load text store:', e)
-        }
+        // const key = `textStore-${boxIndexRef.current}`
+        // try {
+        //     const stored = localStorage.getItem(key)
+        //     if (stored) {
+        //         const obj = JSON.parse(stored)
+        //         const newStore = new Map<number, string>()
+        //         Object.keys(obj).forEach(k => {
+        //             newStore.set(Number(k), obj[k])
+        //         })
+        //         setTextStore(newStore)
+        //     }
+        // } catch (e) {
+        //     console.error('Failed to load text store:', e)
+        // }
     }, [])
 
     useEffect(() => {
