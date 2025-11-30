@@ -24,6 +24,8 @@ const ImageBox = () => {
         type: 'info',
         visible: false,
     })
+    const [popoverMarkId, setPopoverMarkId] = useState<number | null>(null)
+    const [popoverPosition, setPopoverPosition] = useState<{ left: number; top: number } | null>(null)
 
     // Refs
     const fileInputRef = useRef<HTMLInputElement>(null)
@@ -55,6 +57,7 @@ const ImageBox = () => {
   const lastDistanceRef = useRef(0)
   const lastScaleRef = useRef(1)
   const frameRequestedRef = useRef(false)
+  const longPressTimerRef = useRef<Map<number, number>>(new Map())
 
     // 工具函数：显示状态提示
     const showStatus = (text: string, type: 'info' | 'success' | 'error' = 'info') => {
@@ -283,31 +286,15 @@ const ImageBox = () => {
         return Math.sqrt(dx * dx + dy * dy)
     }
 
-    const handlePanStart = (e: React.MouseEvent | React.TouchEvent) => {
+    const handlePanStart = (e: React.MouseEvent) => {
         if (!imageSrc) return
         
-        // 触摸事件：检查是否是双指操作
-        if ('touches' in e && e.touches.length === 2) {
-            if (sliderLocked) {
-                showStatus('请点击"调整图片"按钮启用调整模式', 'info')
-                return
-            }
-            isPinchingRef.current = true
-            isPanningRef.current = false
-            const distance = getDistance(e.touches[0], e.touches[1])
-            lastDistanceRef.current = distance
-            lastScaleRef.current = userScale
-            return
-        }
-        
-        // 单指或鼠标：平移操作
+        // 鼠标：平移操作
         if (!adjustMode && userScale <= 1) return
         isPanningRef.current = true
         isPinchingRef.current = false
-        const clientX = 'touches' in e ? e.touches[0].clientX : e.clientX
-        const clientY = 'touches' in e ? e.touches[0].clientY : e.clientY
-        lastXRef.current = clientX
-        lastYRef.current = clientY
+        lastXRef.current = e.clientX
+        lastYRef.current = e.clientY
         if (imageBoxRef.current) {
             imageBoxRef.current.style.cursor = 'grabbing'
         }
@@ -316,6 +303,9 @@ const ImageBox = () => {
     const handlePanMove = (e: MouseEvent | TouchEvent) => {
         // 双指缩放
         if ('touches' in e && e.touches.length === 2 && isPinchingRef.current) {
+            // 立即阻止默认行为，防止页面缩放（特别是放大时）
+            e.preventDefault()
+            e.stopPropagation()
             if (!imageBoxRef.current || sliderLocked) return
             
             const distance = getDistance(e.touches[0], e.touches[1])
@@ -387,17 +377,55 @@ const ImageBox = () => {
 
         const handleMouseMove = (e: MouseEvent) => handlePanMove(e)
         const handleMouseUp = () => handlePanEnd()
-        const handleTouchMove = (e: TouchEvent) => {
-            handlePanMove(e)
-            // 双指操作时阻止默认行为
+        
+        // 触摸开始：检测双指操作（参考 index2.html，但添加双指缩放支持）
+        const handleTouchStart = (e: TouchEvent) => {
+            if (!imageSrc) return
+            
+            // 双指操作：阻止默认行为并开始缩放
             if (e.touches.length === 2) {
                 e.preventDefault()
+                e.stopPropagation()
+                if (sliderLocked) {
+                    showStatus('请点击"调整图片"按钮启用调整模式', 'info')
+                    return
+                }
+                isPinchingRef.current = true
+                isPanningRef.current = false
+                const distance = getDistance(e.touches[0], e.touches[1])
+                lastDistanceRef.current = distance
+                lastScaleRef.current = userScale
+            } else if (e.touches.length === 1) {
+                // 单指操作：平移（参考 index2.html）
+                if (!adjustMode && userScale <= 1) return
+                isPanningRef.current = true
+                isPinchingRef.current = false
+                const t = e.touches[0]
+                lastXRef.current = t.clientX
+                lastYRef.current = t.clientY
+                if (imageBoxRef.current) {
+                    imageBoxRef.current.style.cursor = 'grabbing'
+                }
             }
         }
+        
+        // 触摸移动：双指时阻止默认行为，单指时不阻止（参考 index2.html）
+        const handleTouchMove = (e: TouchEvent) => {
+            // 双指操作时阻止默认行为（防止页面缩放）
+            if (e.touches.length === 2 || isPinchingRef.current) {
+                e.preventDefault()
+                e.stopPropagation()
+            }
+            handlePanMove(e)
+        }
+        
         const handleTouchEnd = () => handlePanEnd()
 
         viewport.addEventListener('mousemove', handleMouseMove)
         window.addEventListener('mouseup', handleMouseUp)
+        // touchstart 使用 passive: false，因为需要检测双指并调用 preventDefault
+        viewport.addEventListener('touchstart', handleTouchStart, { passive: false })
+        // touchmove 使用 passive: false，因为双指时需要调用 preventDefault
         viewport.addEventListener('touchmove', handleTouchMove, { passive: false })
         viewport.addEventListener('touchend', handleTouchEnd, { passive: true })
         viewport.addEventListener('touchcancel', handleTouchEnd, { passive: true })
@@ -405,47 +433,62 @@ const ImageBox = () => {
         return () => {
             viewport.removeEventListener('mousemove', handleMouseMove)
             window.removeEventListener('mouseup', handleMouseUp)
+            viewport.removeEventListener('touchstart', handleTouchStart)
             viewport.removeEventListener('touchmove', handleTouchMove)
             viewport.removeEventListener('touchend', handleTouchEnd)
+            viewport.removeEventListener('touchcancel', handleTouchEnd)
         }
-    }, [adjustMode, userScale, imageSrc])
+    }, [adjustMode, userScale, imageSrc, sliderLocked])
 
-    // 鼠标滚轮缩放
-    const handleWheel = (e: React.WheelEvent) => {
-        if (!imageSrc || sliderLocked) {
-            if (sliderLocked) {
-                showStatus('请点击"调整图片"按钮启用调整模式', 'info')
+    // 鼠标滚轮缩放（使用原生事件监听器，参考 index2.html）
+    useEffect(() => {
+        const imageBox = imageBoxRef.current
+        if (!imageBox) return
+
+        const handleWheel = (e: WheelEvent) => {
+            if (!imageSrc || sliderLocked) {
+                if (sliderLocked) {
+                    showStatus('请点击"调整图片"按钮启用调整模式', 'info')
+                }
+                return
             }
-            return
-        }
-        e.preventDefault()
-        e.stopPropagation()
+            e.preventDefault()
+            e.stopPropagation()
 
-        if (!imageBoxRef.current) return
-        const rect = imageBoxRef.current.getBoundingClientRect()
-        const px = e.clientX - rect.left
-        const py = e.clientY - rect.top
-        const prevUserScale = userScale
-        const prevScale = baseScaleRef.current * prevUserScale
-        const min = 1
-        const max = 3
-        let nextUserScale = prevUserScale + (-e.deltaY) * 0.001 * (max - min)
-        nextUserScale = Math.max(min, Math.min(max, Number(nextUserScale.toFixed(2))))
-        if (nextUserScale === prevUserScale) return
-        if (nextUserScale === 1) {
-            txRef.current = 0
-            tyRef.current = 0
+            const rect = imageBox.getBoundingClientRect()
+            const px = e.clientX - rect.left
+            const py = e.clientY - rect.top
+            const prevUserScale = userScale
+            const prevScale = baseScaleRef.current * prevUserScale
+            const min = 1
+            const max = 3
+            let nextUserScale = prevUserScale + (-e.deltaY) * 0.001 * (max - min)
+            nextUserScale = Math.max(min, Math.min(max, Number(nextUserScale.toFixed(2))))
+            if (nextUserScale === prevUserScale) return
+            if (nextUserScale === 1) {
+                txRef.current = 0
+                tyRef.current = 0
+            }
+
+            const newScale = baseScaleRef.current * nextUserScale
+            const centerTx = (rect.width - nwRef.current * prevScale) / 2
+            const centerTy = (rect.height - nhRef.current * prevScale) / 2
+            const imgX = (px - centerTx - txRef.current) / prevScale
+            const imgY = (py - centerTy - tyRef.current) / prevScale
+            txRef.current += imgX * (prevScale - newScale)
+            tyRef.current += imgY * (prevScale - newScale)
+            setUserScale(nextUserScale)
+            updateSliderByScale()
+            updateTransform()
         }
 
-        const newScale = baseScaleRef.current * nextUserScale
-        const centerTx = (rect.width - nwRef.current * prevScale) / 2
-        const centerTy = (rect.height - nhRef.current * prevScale) / 2
-        const imgX = (px - centerTx - txRef.current) / prevScale
-        const imgY = (py - centerTy - tyRef.current) / prevScale
-        txRef.current += imgX * (prevScale - newScale)
-        tyRef.current += imgY * (prevScale - newScale)
-        setUserScale(nextUserScale)
-    }
+        // 使用 passive: false 确保可以调用 preventDefault（参考 index2.html）
+        imageBox.addEventListener('wheel', handleWheel, { passive: false })
+
+        return () => {
+            imageBox.removeEventListener('wheel', handleWheel)
+        }
+    }, [imageSrc, sliderLocked, userScale])
 
     // 双击添加标记点
     const handleDoubleClick = (e: React.MouseEvent<HTMLDivElement>) => {
@@ -494,7 +537,43 @@ const ImageBox = () => {
         })
         setTextStore(newTextStore)
         syncSequence()
+        // 关闭 popover
+        closeDeletePopover()
     }
+
+    // 显示删除菜单
+    const showDeletePopover = (markId: number, markX: number, markY: number) => {
+        setPopoverMarkId(markId)
+        // 显示在标记点右边
+        setPopoverPosition({
+            left: markX + 20, // 标记点右边 20px
+            top: markY
+        })
+    }
+
+    // 关闭删除菜单
+    const closeDeletePopover = () => {
+        setPopoverMarkId(null)
+        setPopoverPosition(null)
+    }
+
+    // 点击外部关闭 popover
+    useEffect(() => {
+        if (!popoverMarkId) return
+
+        const handleClickOutside = (e: MouseEvent) => {
+            const target = e.target as Node
+            const popover = document.querySelector('.delete-popover')
+            if (popover && !popover.contains(target)) {
+                closeDeletePopover()
+            }
+        }
+
+        document.addEventListener('click', handleClickOutside, true)
+        return () => {
+            document.removeEventListener('click', handleClickOutside, true)
+        }
+    }, [popoverMarkId])
 
     // 标记点拖拽
     const handleMarkDragStart = (e: React.MouseEvent, markId: number) => {
@@ -658,8 +737,11 @@ const ImageBox = () => {
                         ref={imageBoxRef}
                         className="relative w-full md:w-96 h-56 bg-gradient-to-b from-white to-gray-100 border border-gray-200 rounded-lg shadow-md overflow-hidden cursor-pointer hover:shadow-lg transition-shadow"
                         onDoubleClick={handleDoubleClick}
-                        onWheel={handleWheel}
-                        style={{ cursor: adjustMode ? 'grab' : 'pointer' }}
+                        // wheel 事件在原生事件监听器中处理，避免 passive 事件监听器错误
+                        style={{ 
+                            cursor: adjustMode ? 'grab' : 'pointer',
+                            touchAction: 'none' // 阻止默认触摸行为，防止页面缩放
+                        }}
                     >
                         {/* 提示文字（无图片时显示） */}
                         {!imageSrc && (
@@ -673,13 +755,6 @@ const ImageBox = () => {
                             ref={viewportRef}
                             className="absolute inset-0 flex items-center justify-center pointer-events-auto"
                             onMouseDown={imageSrc ? handlePanStart : undefined}
-                            onTouchStart={imageSrc ? (e) => {
-                                handlePanStart(e)
-                                // 双指操作时阻止默认行为（防止页面缩放）
-                                if (e.touches.length === 2) {
-                                    e.preventDefault()
-                                }
-                            } : undefined}
                         >
                             {imageSrc && (
                                 <img
@@ -730,8 +805,32 @@ const ImageBox = () => {
                                     onContextMenu={(e) => {
                                         e.preventDefault()
                                         e.stopPropagation()
-                                        if (confirm('确定要删除这个标记吗？')) {
-                                            handleDeleteMark(mark.id)
+                                        showDeletePopover(mark.id, mark.x, mark.y)
+                                    }}
+                                    onTouchStart={(e) => {
+                                        e.stopPropagation()
+                                        // 移动端长按触发删除菜单
+                                        const timer = window.setTimeout(() => {
+                                            showDeletePopover(mark.id, mark.x, mark.y)
+                                        }, 500)
+                                        longPressTimerRef.current.set(mark.id, timer)
+                                    }}
+                                    onTouchEnd={(e) => {
+                                        e.stopPropagation()
+                                        // 清除长按定时器
+                                        const timer = longPressTimerRef.current.get(mark.id)
+                                        if (timer) {
+                                            clearTimeout(timer)
+                                            longPressTimerRef.current.delete(mark.id)
+                                        }
+                                    }}
+                                    onTouchCancel={(e) => {
+                                        e.stopPropagation()
+                                        // 清除长按定时器
+                                        const timer = longPressTimerRef.current.get(mark.id)
+                                        if (timer) {
+                                            clearTimeout(timer)
+                                            longPressTimerRef.current.delete(mark.id)
                                         }
                                     }}
                                 >
@@ -744,6 +843,28 @@ const ImageBox = () => {
                                 </div>
                             ))}
                         </div>
+
+                        {/* 删除菜单 Popover */}
+                        {popoverMarkId && popoverPosition && (
+                            <div
+                                className="absolute bg-white border border-gray-200 rounded-lg shadow-lg px-2 py-1.5 text-xs text-gray-800 z-30 flex items-center"
+                                style={{
+                                    left: `${popoverPosition.left}px`,
+                                    top: `${popoverPosition.top}px`,
+                                    transform: 'translateY(-50%)',
+                                }}
+                            >
+                                <button
+                                    className="min-w-[64px] h-7 rounded-md bg-white border border-red-500 text-red-500 text-xs cursor-pointer transition-all hover:opacity-85 active:scale-[0.97]"
+                                    onClick={(e) => {
+                                        e.stopPropagation()
+                                        handleDeleteMark(popoverMarkId)
+                                    }}
+                                >
+                                    删除
+                                </button>
+                            </div>
+                        )}
 
                         {/* 状态提示 */}
                         {status.visible && (
@@ -798,8 +919,8 @@ const ImageBox = () => {
                 <div className="flex gap-5 flex-1 w-full md:w-auto mt-4 md:mt-0 relative">
                     <div
                         ref={textPanelRef}
-                        className="flex-1 min-w-0"
-                        style={{ height: '224px' }}
+                        className="min-w-0"
+                        style={{ height: '224px', width: '200px' }}
                     >
                         <textarea
                             className="w-full h-full border border-gray-300 rounded-lg p-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent resize-none"
