@@ -46,6 +46,7 @@ const ImageBox = () => {
     const tyRef = useRef(0) // translate y
     const nextIdRef = useRef(1)
     const boxIndexRef = useRef(0)
+    const isInitializingRef = useRef(false) // 标记是否正在初始化图片
 
   // 拖拽状态
   const isDraggingRef = useRef(false)
@@ -97,7 +98,7 @@ const ImageBox = () => {
     reader.readAsDataURL(file)
   }
 
-  // 图片加载完成处理
+  // 图片加载完成处理（参考 index2.html 的逻辑）
   useEffect(() => {
     const img = imageRef.current
     if (!img || !imageSrc) return
@@ -105,26 +106,40 @@ const ImageBox = () => {
     const handleLoad = () => {
       if (!img.naturalWidth || !img.naturalHeight) return
       
+      // 标记正在初始化，避免 useEffect 中的 updateTransform 覆盖居中位置
+      isInitializingRef.current = true
+      
+      // 先设置图片尺寸（参考 index2.html 第497-498行）
       nwRef.current = img.naturalWidth
       nhRef.current = img.naturalHeight
 
-      if (!imageBoxRef.current) return
+      if (!imageBoxRef.current) {
+        isInitializingRef.current = false
+        return
+      }
       const rect = imageBoxRef.current.getBoundingClientRect()
       const cw = rect.width
       const ch = rect.height
 
+      // 计算基础缩放（参考 index2.html 第501行）
       baseScaleRef.current = Math.min(cw / nwRef.current, ch / nhRef.current)
-      setUserScale(1)
+      
+      // 重置状态（参考 index2.html 第502-503行）
       txRef.current = 0
       tyRef.current = 0
-
+      
+      // 计算居中位置（参考 index2.html 第504-507行）
       const sw = nwRef.current * baseScaleRef.current
       const sh = nhRef.current * baseScaleRef.current
       const centerTx = (cw - sw) / 2
       const centerTy = (ch - sh) / 2
 
+      // 直接设置 transform（参考 index2.html 第508行），不调用 updateTransform
       img.style.transform = `translate3d(${centerTx}px, ${centerTy}px, 0) scale(${baseScaleRef.current})`
+      
+      // 更新滑条和状态（参考 index2.html 第509-516行）
       updateSliderByScale()
+      setUserScale(1) // 在设置完 transform 后再更新 state
       setAdjustMode(true)
       setSliderLocked(false)
       // 保留已有的标记点，不清空
@@ -134,12 +149,19 @@ const ImageBox = () => {
       if (overlayRef.current) {
         overlayRef.current.style.pointerEvents = 'none'
       }
+      
+      // 初始化完成，允许后续的 updateTransform 调用
+      setTimeout(() => {
+        isInitializingRef.current = false
+      }, 100)
     }
 
     // 如果图片已经加载完成
     if (img.complete && img.naturalWidth > 0 && img.naturalHeight > 0) {
-      // 使用 setTimeout 确保 DOM 已更新
-      setTimeout(handleLoad, 0)
+      // 使用 requestAnimationFrame 确保 DOM 已更新（参考 index2.html）
+      requestAnimationFrame(() => {
+        requestAnimationFrame(handleLoad)
+      })
     } else {
       img.addEventListener('load', handleLoad)
       return () => img.removeEventListener('load', handleLoad)
@@ -217,13 +239,15 @@ const ImageBox = () => {
         }
     }
 
-    // 当 userScale 或 adjustMode 改变时更新变换
+    // 当 userScale 改变时更新变换（图片加载时由 handleLoad 处理，这里不重复调用）
     useEffect(() => {
-        if (imageSrc) {
+        // 如果正在初始化，不调用 updateTransform，避免覆盖居中位置
+        if (isInitializingRef.current) return
+        if (imageSrc && nwRef.current > 0 && nhRef.current > 0) {
             updateTransform()
             updateSliderByScale()
         }
-    }, [userScale, imageSrc])
+    }, [userScale])
 
     // 缩放滑条处理
     const scaleFromPos = (y: number) => {
@@ -492,6 +516,11 @@ const ImageBox = () => {
 
     // 双击添加标记点
     const handleDoubleClick = (e: React.MouseEvent<HTMLDivElement>) => {
+        // 只有在锁定状态下才能新增序号
+        if (adjustMode) {
+            showStatus('请先切换到锁定状态才能添加标记点', 'info')
+            return
+        }
         if (!imageBoxRef.current || marks.length >= 8) {
             showStatus('数量已达上限', 'error')
             return
@@ -517,25 +546,22 @@ const ImageBox = () => {
         setCurrentTextId(id)
     }
 
-    // 标记点删除
+    // 标记点删除：只删掉该点，其它点位置不动，内部 id 不变
     const handleDeleteMark = (id: number) => {
-        const newMarks = marks.filter(m => m.id !== id).map((m, idx) => ({
-            ...m,
-            id: idx + 1,
-        }))
-        setMarks(newMarks)
+        // 从列表中移除该标记，其它保持原样（位置和内部 id 都不改）
+        const filteredMarks = marks.filter(m => m.id !== id)
+        setMarks(filteredMarks)
         setSelectedMarkId(null)
         setCurrentTextId(null)
-        nextIdRef.current = newMarks.length + 1
 
-        // 重新索引文本存储
-        const newTextStore = new Map<number, string>()
-        marks.forEach((m, idx) => {
-            if (m.id !== id && textStore.has(m.id)) {
-                newTextStore.set(idx + 1, textStore.get(m.id)!)
-            }
-        })
+        // 删除对应 id 的文字，其他文字保持不变
+        const newTextStore = new Map(textStore)
+        newTextStore.delete(id)
         setTextStore(newTextStore)
+
+        // 下一个 id 继续自增（不因为删除而回退），避免已有点的内部 id 改变
+        // nextIdRef.current 保持不动
+
         syncSequence()
         // 关闭 popover
         closeDeletePopover()
@@ -543,6 +569,11 @@ const ImageBox = () => {
 
     // 显示删除菜单
     const showDeletePopover = (markId: number, markX: number, markY: number) => {
+        // 只有在锁定状态下才能删除序号
+        if (adjustMode) {
+            showStatus('请先切换到锁定状态才能删除标记点', 'info')
+            return
+        }
         setPopoverMarkId(markId)
         // 显示在标记点右边
         setPopoverPosition({
@@ -646,17 +677,18 @@ const ImageBox = () => {
             imageRef.current.style.transform = ''
         }
         setImageSrc('')
-        setMarks([])
+        // 保留标记点和文字，不清空
+        // setMarks([]) - 已移除，保留标记点
+        // setTextStore(new Map()) - 已移除，保留文字
+        // nextIdRef.current = 1 - 已移除，保留ID序列
         setSelectedMarkId(null)
         setCurrentTextId(null)
-        setTextStore(new Map())
         setUserScale(1)
         txRef.current = 0
         tyRef.current = 0
-        nextIdRef.current = 1
         setAdjustMode(false)
         setSliderLocked(true)
-        showStatus('已清除', 'success')
+        showStatus('已清除图片，标记点已保留', 'success')
     }
 
     // localStorage 存储和加载
@@ -692,7 +724,7 @@ const ImageBox = () => {
 
 
     return (
-        <div className="relative flex flex-col items-center w-full">
+        <div className="w-[819px] h-[362px] relative flex flex-col items-center w-full">
             {/* 主容器：图片框 + 文字面板和序列条 */}
             <div className="flex flex-col md:flex-row gap-6 items-start w-full">
                 {/* 左侧：缩放滑条 + 图片框 */}
@@ -750,10 +782,17 @@ const ImageBox = () => {
                             </div>
                         )}
 
-                        {/* Viewport */}
+                        {/* Viewport - 使用 grid 布局，参考 index2.html */}
                         <div
                             ref={viewportRef}
-                            className="absolute inset-0 flex items-center justify-center pointer-events-auto"
+                            className="absolute inset-0 pointer-events-auto"
+                            style={{
+                                display: 'grid',
+                                placeItems: 'center',
+                                willChange: 'transform',
+                                background: 'transparent',
+                                zIndex: 1
+                            }}
                             onMouseDown={imageSrc ? handlePanStart : undefined}
                         >
                             {imageSrc && (
@@ -782,7 +821,9 @@ const ImageBox = () => {
                             className="absolute inset-0 pointer-events-none z-10"
                             style={{ pointerEvents: adjustMode ? 'none' : 'auto' }}
                         >
-                            {marks.map((mark) => (
+                            {marks.map((mark, index) => {
+                                const displayIndex = index + 1
+                                return (
                                 <div
                                     key={mark.id}
                                     className={`absolute w-5 h-5 rounded-full border-2 flex items-center justify-center cursor-pointer transition-all ${selectedMarkId === mark.id
@@ -838,10 +879,10 @@ const ImageBox = () => {
                                         className={`text-xs font-bold ${selectedMarkId === mark.id ? 'text-white' : 'text-black'
                                             }`}
                                     >
-                                        {mark.id}
+                                        {displayIndex}
                                     </span>
                                 </div>
-                            ))}
+                            )})}
                         </div>
 
                         {/* 删除菜单 Popover */}
@@ -924,7 +965,11 @@ const ImageBox = () => {
                     >
                         <textarea
                             className="w-full h-full border border-gray-300 rounded-lg p-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent resize-none"
-                            placeholder={currentTextId ? `输入标记 ${currentTextId} 的文字说明...` : '选择一个标记点来输入文字说明'}
+                            placeholder={currentTextId ? (() => {
+                                const markIndex = marks.findIndex(m => m.id === currentTextId)
+                                const displayIndex = markIndex >= 0 ? markIndex + 1 : currentTextId
+                                return `输入标记 ${displayIndex} 的文字说明...`
+                            })() : '选择一个标记点来输入文字说明'}
                             value={currentTextId ? (textStore.get(currentTextId) || '') : ''}
                             onChange={(e) => {
                                 if (currentTextId) {
@@ -941,7 +986,9 @@ const ImageBox = () => {
                         className="w-8 flex flex-col gap-1 overflow-y-auto flex-shrink-0"
                         style={{ height: '224px' }}
                     >
-                        {marks.map((mark) => (
+                        {marks.map((mark, index) => {
+                            const displayIndex = index + 1
+                            return (
                             <div
                                 key={mark.id}
                                 className={`w-5 h-5 rounded-full border-2 flex items-center justify-center text-xs font-bold cursor-pointer transition-all mx-auto ${selectedMarkId === mark.id
@@ -950,9 +997,9 @@ const ImageBox = () => {
                                     }`}
                                 onClick={() => handleMarkClick(mark.id)}
                             >
-                                {mark.id}
+                                {displayIndex}
                             </div>
-                        ))}
+                        )})}
                     </div>
                 </div>
             </div>

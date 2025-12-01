@@ -1,7 +1,6 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import Header from '../components/Header'
 import Footer from '../components/Footer'
-import Carousel from '../components/Carousel'
 import ImageBox from '../components/ImageBox'
 import { 
   scrollFadeInUp, 
@@ -26,6 +25,10 @@ const Home = () => {
   const casesTitleRef = useRef<HTMLHeadingElement>(null)
   const casesCardsRef = useRef<HTMLDivElement[]>([])
   const numberRefs = useRef<HTMLSpanElement[]>([])
+  const [currentSlide, setCurrentSlide] = useState(1) // 默认显示中间的（索引1，对应第2个）
+  const swiperRef = useRef<HTMLDivElement>(null)
+  const startXRef = useRef(0)
+  const isDraggingRef = useRef(false)
 
   useEffect(() => {
     // Handle anchor links
@@ -156,6 +159,84 @@ const Home = () => {
       cleanupFunctions.forEach(cleanup => cleanup())
     }
   }, [])
+
+  // Swiper 拖动处理
+  useEffect(() => {
+    const swiper = swiperRef.current
+    if (!swiper) return
+
+    const handleStart = (clientX: number) => {
+      isDraggingRef.current = true
+      startXRef.current = clientX
+    }
+
+    const handleMove = () => {
+      if (!isDraggingRef.current) return
+      // 拖动时暂时禁用过渡效果
+      const container = swiper.querySelector('.flex') as HTMLElement
+      if (container) {
+        container.style.transition = 'none'
+      }
+    }
+
+    const handleEnd = (clientX: number) => {
+      if (!isDraggingRef.current) return
+      isDraggingRef.current = false
+      
+      const diff = startXRef.current - clientX
+      const threshold = 50 // 拖动阈值
+      
+      if (Math.abs(diff) > threshold) {
+        if (diff > 0 && currentSlide < 2) {
+          setCurrentSlide(currentSlide + 1)
+        } else if (diff < 0 && currentSlide > 0) {
+          setCurrentSlide(currentSlide - 1)
+        }
+      }
+      
+      // 恢复过渡效果
+      const container = swiper.querySelector('.flex') as HTMLElement
+      if (container) {
+        container.style.transition = 'transform 0.5s ease-out'
+      }
+    }
+
+    // 鼠标事件
+    const onMouseDown = (e: MouseEvent) => handleStart(e.clientX)
+    const onMouseMove = () => handleMove()
+    const onMouseUp = (e: MouseEvent) => handleEnd(e.clientX)
+
+    // 触摸事件
+    const onTouchStart = (e: TouchEvent) => {
+      if (e.touches.length === 1) {
+        handleStart(e.touches[0].clientX)
+      }
+    }
+    const onTouchMove = () => {
+      handleMove()
+    }
+    const onTouchEnd = (e: TouchEvent) => {
+      if (e.changedTouches.length === 1) {
+        handleEnd(e.changedTouches[0].clientX)
+      }
+    }
+
+    swiper.addEventListener('mousedown', onMouseDown)
+    window.addEventListener('mousemove', onMouseMove)
+    window.addEventListener('mouseup', onMouseUp)
+    swiper.addEventListener('touchstart', onTouchStart, { passive: true })
+    swiper.addEventListener('touchmove', onTouchMove, { passive: true })
+    swiper.addEventListener('touchend', onTouchEnd, { passive: true })
+
+    return () => {
+      swiper.removeEventListener('mousedown', onMouseDown)
+      window.removeEventListener('mousemove', onMouseMove)
+      window.removeEventListener('mouseup', onMouseUp)
+      swiper.removeEventListener('touchstart', onTouchStart)
+      swiper.removeEventListener('touchmove', onTouchMove)
+      swiper.removeEventListener('touchend', onTouchEnd)
+    }
+  }, [currentSlide])
 
   const carouselItems = [
     {
@@ -358,12 +439,55 @@ const Home = () => {
 
       {/* Image Boxes Section - 从 HTML 文件提取的功能 */}
       <section className="py-20 bg-gradient-to-b from-gray-50 to-white my-5">
-        <div className="container mx-auto px-4">
-          <div className="max-w-4xl mx-auto">
-            <div className="flex flex-col gap-16">
-              {/* {[1, 2, 3].map((boxIndex) => ( */}
-                <ImageBox key={1} />
-              {/* ))} */}
+        <div className="container mx-auto">
+          <div className="w-full mx-auto" style={{ maxWidth: '1600px' }}>
+            {/* Swiper 容器 */}
+            <div ref={swiperRef} className="relative overflow-hidden cursor-grab active:cursor-grabbing" style={{ height: '400px' }}>
+              <div 
+                className="flex items-center transition-transform duration-500 ease-out h-full"
+                style={{
+                  width: '300%',
+                  transform: `translateX(calc(-33.333% * ${currentSlide} + 33.333%))`
+                }}
+              >
+                {[1, 2, 3].map((boxIndex, index) => (
+                  <div
+                    key={boxIndex}
+                    className="flex-shrink-0 flex items-center justify-center"
+                    style={{
+                      width: '33.333%',
+                      padding: '0 20px',
+                      transform: index === currentSlide ? 'scale(1)' : 'scale(0.85)',
+                      opacity: index === currentSlide ? 1 : 0.5,
+                      transition: 'transform 0.5s ease-out, opacity 0.5s ease-out'
+                    }}
+                  >
+                    <div className="w-full" style={{ maxWidth: '819px' }}>
+                      <ImageBox />
+                    </div>
+                  </div>
+                ))}
+              </div>
+              
+              {/* 导航按钮 */}
+              <button
+                onClick={() => setCurrentSlide(Math.max(0, currentSlide - 1))}
+                className="absolute left-4 top-1/2 -translate-y-1/2 z-10 bg-white/90 hover:bg-white rounded-full p-3 shadow-lg transition-all hover:scale-110 disabled:opacity-50 disabled:cursor-not-allowed"
+                disabled={currentSlide === 0}
+              >
+                <svg className="w-6 h-6 text-gray-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                </svg>
+              </button>
+              <button
+                onClick={() => setCurrentSlide(Math.min(2, currentSlide + 1))}
+                className="absolute right-4 top-1/2 -translate-y-1/2 z-10 bg-white/90 hover:bg-white rounded-full p-3 shadow-lg transition-all hover:scale-110 disabled:opacity-50 disabled:cursor-not-allowed"
+                disabled={currentSlide === 2}
+              >
+                <svg className="w-6 h-6 text-gray-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                </svg>
+              </button>
             </div>
           </div>
         </div>
