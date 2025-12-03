@@ -26,9 +26,6 @@ const Home = () => {
   const casesCardsRef = useRef<HTMLDivElement[]>([])
   const numberRefs = useRef<HTMLSpanElement[]>([])
   const [currentSlide, setCurrentSlide] = useState(1) // 默认显示中间的（索引1，对应第2个）
-  const swiperRef = useRef<HTMLDivElement>(null)
-  const startXRef = useRef(0)
-  const isDraggingRef = useRef(false)
 
   useEffect(() => {
     // Handle anchor links
@@ -159,121 +156,6 @@ const Home = () => {
       cleanupFunctions.forEach(cleanup => cleanup())
     }
   }, [])
-
-  // Swiper 拖动处理
-  useEffect(() => {
-    const swiper = swiperRef.current
-    if (!swiper) return
-
-    const handleStart = (clientX: number) => {
-      isDraggingRef.current = true
-      startXRef.current = clientX
-    }
-
-    const handleMove = () => {
-      if (!isDraggingRef.current) return
-      // 拖动时暂时禁用过渡效果
-      const container = swiper.querySelector('.flex') as HTMLElement
-      if (container) {
-        container.style.transition = 'none'
-      }
-    }
-
-    const handleEnd = (clientX: number) => {
-      if (!isDraggingRef.current) return
-      isDraggingRef.current = false
-      
-      const diff = startXRef.current - clientX
-      const threshold = 50 // 拖动阈值
-      
-      if (Math.abs(diff) > threshold) {
-        if (diff > 0 && currentSlide < 2) {
-          setCurrentSlide(currentSlide + 1)
-        } else if (diff < 0 && currentSlide > 0) {
-          setCurrentSlide(currentSlide - 1)
-        }
-      }
-      
-      // 恢复过渡效果
-      const container = swiper.querySelector('.flex') as HTMLElement
-      if (container) {
-        container.style.transition = 'transform 0.5s ease-out'
-      }
-    }
-
-    // 鼠标事件
-    const onMouseDown = (e: MouseEvent) => handleStart(e.clientX)
-    const onMouseMove = () => handleMove()
-    const onMouseUp = (e: MouseEvent) => handleEnd(e.clientX)
-
-    // 触摸事件
-    const onTouchStart = (e: TouchEvent) => {
-      if (e.touches.length === 1) {
-        handleStart(e.touches[0].clientX)
-      }
-    }
-    const onTouchMove = () => {
-      handleMove()
-    }
-    const onTouchEnd = (e: TouchEvent) => {
-      if (e.changedTouches.length === 1) {
-        handleEnd(e.changedTouches[0].clientX)
-      }
-    }
-
-    swiper.addEventListener('mousedown', onMouseDown)
-    window.addEventListener('mousemove', onMouseMove)
-    window.addEventListener('mouseup', onMouseUp)
-    swiper.addEventListener('touchstart', onTouchStart, { passive: true })
-    swiper.addEventListener('touchmove', onTouchMove, { passive: true })
-    swiper.addEventListener('touchend', onTouchEnd, { passive: true })
-
-    return () => {
-      swiper.removeEventListener('mousedown', onMouseDown)
-      window.removeEventListener('mousemove', onMouseMove)
-      window.removeEventListener('mouseup', onMouseUp)
-      swiper.removeEventListener('touchstart', onTouchStart)
-      swiper.removeEventListener('touchmove', onTouchMove)
-      swiper.removeEventListener('touchend', onTouchEnd)
-    }
-  }, [currentSlide])
-
-  const carouselItems = [
-    {
-      id: 1,
-      image: '/images/1.png',
-      title: '【设计师】的 AI 工具',
-      description:
-        '如果是笔记本用户，在学习教程的时候，不得不频繁在视频、操作软件之间切换，SeeLayer 的教程是半透明',
-    },
-    {
-      id: 2,
-      image: '/images/2.png',
-      title: '【猎头】的销售视频',
-      description:
-        '如果是笔记本用户，在学习教程的时候，不得不频繁在视频、操作软件之间切换，SeeLayer 的教程是半透明',
-    },
-    {
-      id: 3,
-      image: '/images/3.png',
-      title: '【教师】的地图讲解',
-      description:
-        '如果是笔记本用户，在学习教程的时候，不得不频繁在视频、操作软件之间切换，SeeLayer 的教程是半透明',
-    },
-    {
-      id: 4,
-      image: '/images/4.png',
-      title: '【程序员】的 AI 工具',
-      description: '鼠标穿透，不影响操作',
-    },
-    {
-      id: 5,
-      image: '/images/5.png',
-      title: '【秘书】的商务工具',
-      description:
-        '对厂商来说，每次软件更新了内容，会有一堆人追着问如何操作，之前的功能演示视频，反而成了待更新的错误信息，透见 SeeLayer 的核心俩功能之一，就是实时更新动动鼠标，文字随动',
-    },
-  ]
 
   const features = [
     {
@@ -440,14 +322,13 @@ const Home = () => {
       {/* Image Boxes Section - 从 HTML 文件提取的功能 */}
       <section className="py-20 bg-gradient-to-b from-gray-50 to-white my-5">
         <div className="container mx-auto">
-          <div className="w-full mx-auto" style={{ maxWidth: '1600px' }}>
+          <div className="w-full mx-auto flex justify-center" style={{ maxWidth: '1600px' }}>
             {/* Swiper 容器 */}
-            <div ref={swiperRef} className="relative overflow-hidden cursor-grab active:cursor-grabbing" style={{ height: '400px' }}>
+            <div className="relative" style={{ height: '400px', width: '100%', overflow: 'visible' }}>
               <div 
                 className="flex items-center transition-transform duration-500 ease-out h-full"
                 style={{
-                  width: '300%',
-                  transform: `translateX(calc(-33.333% * ${currentSlide} + 33.333%))`
+                  transform: `translateX(calc(50% - ${820 / 2}px - ${currentSlide} * ${820 + 112}px))`
                 }}
               >
                 {[1, 2, 3].map((boxIndex, index) => (
@@ -455,16 +336,14 @@ const Home = () => {
                     key={boxIndex}
                     className="flex-shrink-0 flex items-center justify-center"
                     style={{
-                      width: '33.333%',
-                      padding: '0 20px',
+                      width: '820px',
+                      marginRight: index < 2 ? '112px' : '0',
                       transform: index === currentSlide ? 'scale(1)' : 'scale(0.85)',
                       opacity: index === currentSlide ? 1 : 0.5,
                       transition: 'transform 0.5s ease-out, opacity 0.5s ease-out'
                     }}
                   >
-                    <div className="w-full" style={{ maxWidth: '819px' }}>
-                      <ImageBox />
-                    </div>
+                    <ImageBox />
                   </div>
                 ))}
               </div>
@@ -499,7 +378,7 @@ const Home = () => {
       </div> */}
 
       {/* Cases Section - 案例汇聚 */}
-      <section id="cases" ref={casesSectionRef} className="py-20 bg-gradient-to-b from-white to-gray-50 scroll-mt-20 my-5">
+      {/* <section id="cases" ref={casesSectionRef} className="py-20 bg-gradient-to-b from-white to-gray-50 scroll-mt-20 my-5">
         <div className="container mx-auto px-4">
           <div className="text-center mb-16">
             <h2 ref={casesTitleRef} className="text-4xl md:text-5xl font-bold text-gray-900 mb-4 opacity-0">
@@ -510,7 +389,6 @@ const Home = () => {
             </p>
           </div>
 
-          {/* Statistics */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-6 mb-16">
             {stats.map((stat, index) => (
               <div
@@ -537,8 +415,6 @@ const Home = () => {
               </div>
             ))}
           </div>
-
-          {/* Cases Grid */}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
             {cases.map((caseItem, index) => (
               <div
@@ -583,7 +459,7 @@ const Home = () => {
             ))}
           </div>
         </div>
-      </section>
+      </section> */}
 
       {/* Features2 Section */}
       <section id="features2" ref={features2SectionRef} className="py-20 bg-white scroll-mt-20 mt-5">

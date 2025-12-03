@@ -526,12 +526,13 @@ const ImageBox = () => {
             return
         }
         const rect = imageBoxRef.current.getBoundingClientRect()
+        // 直接使用鼠标点击位置，标记点使用 translate(-50%, -50%) 居中
         const x = e.clientX - rect.left
         const y = e.clientY - rect.top
         const newMark: Mark = {
             id: nextIdRef.current++,
-            x: Math.max(10, Math.min(rect.width - 10, x - 10)),
-            y: Math.max(10, Math.min(rect.height - 10, y - 10)),
+            x: Math.max(0, Math.min(rect.width, x)),
+            y: Math.max(0, Math.min(rect.height, y)),
         }
         setMarks([...marks, newMark])
         setSelectedMarkId(newMark.id)
@@ -724,7 +725,7 @@ const ImageBox = () => {
 
 
     return (
-        <div className="w-[819px] h-[362px] relative flex flex-col items-center w-full">
+        <div className="w-[820px] h-[362px] relative flex flex-col items-center w-full">
             {/* 主容器：图片框 + 文字面板和序列条 */}
             <div className="flex flex-col md:flex-row gap-6 items-start w-full">
                 {/* 左侧：缩放滑条 + 图片框 */}
@@ -732,7 +733,7 @@ const ImageBox = () => {
                     {/* 缩放滑条 */}
                     <div
                         ref={sliderRef}
-                        className="absolute right-full mr-4 w-2.5 h-40 rounded-full bg-gradient-to-b from-gray-200 to-gray-300 shadow-inner cursor-pointer"
+                        className="absolute right-full mr-8 w-2.5 h-48 rounded-full bg-gradient-to-b from-gray-200 to-gray-300 shadow-inner cursor-pointer"
                         style={{ transform: 'translateY(-50%)', top: '50%' }}
                         onMouseDown={handleSliderMouseDown}
                         onClick={(e) => {
@@ -767,7 +768,7 @@ const ImageBox = () => {
                     {/* 图片框 */}
                     <div
                         ref={imageBoxRef}
-                        className="relative w-full md:w-96 h-56 bg-gradient-to-b from-white to-gray-100 border border-gray-200 rounded-lg shadow-md overflow-hidden cursor-pointer hover:shadow-lg transition-shadow"
+                        className="relative w-full md:w-[500px] h-[300px] bg-gradient-to-b from-white to-gray-100 border border-gray-200 rounded-lg shadow-md overflow-hidden cursor-pointer hover:shadow-lg transition-shadow"
                         onDoubleClick={handleDoubleClick}
                         // wheel 事件在原生事件监听器中处理，避免 passive 事件监听器错误
                         style={{ 
@@ -930,7 +931,7 @@ const ImageBox = () => {
                     </div>
 
                     {/* 操作按钮 */}
-                    <div className="flex gap-2 mt-4 w-full justify-center">
+                    <div className="flex gap-2 mt-4 w-full justify-between">
                         <button
                             className={`px-4 py-2 rounded text-sm font-medium transition-all ${adjustMode
                                     ? 'bg-green-500 text-white border border-green-500'
@@ -961,7 +962,7 @@ const ImageBox = () => {
                     <div
                         ref={textPanelRef}
                         className="min-w-0"
-                        style={{ height: '224px', width: '200px' }}
+                        style={{ height: '300px', width: '200px' }}
                     >
                         <textarea
                             className="w-full h-full border border-gray-300 rounded-lg p-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent resize-none"
