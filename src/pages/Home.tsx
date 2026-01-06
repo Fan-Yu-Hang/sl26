@@ -21,13 +21,17 @@ const Home = () => {
   const mainSectionRef = useRef<HTMLDivElement>(null)
   const features2SectionRef = useRef<HTMLDivElement>(null)
   const features2CardsRef = useRef<HTMLDivElement[]>([])
-  const casesSectionRef = useRef<HTMLDivElement>(null)
   const casesTitleRef = useRef<HTMLHeadingElement>(null)
   const casesCardsRef = useRef<HTMLDivElement[]>([])
   const numberRefs = useRef<HTMLSpanElement[]>([])
   const [currentSlide, setCurrentSlide] = useState(1) // 默认显示中间的（索引1，对应第2个）
+  const [windowWidth, setWindowWidth] = useState(typeof window !== 'undefined' ? window.innerWidth : 1200)
 
   useEffect(() => {
+    // Handle resize for responsive carousel
+    const handleResize = () => setWindowWidth(window.innerWidth)
+    window.addEventListener('resize', handleResize)
+    
     // Handle anchor links
     const handleAnchorClick = (e: MouseEvent) => {
       const target = e.target as HTMLElement
@@ -201,64 +205,6 @@ const Home = () => {
     },
   ]
 
-  const cases = [
-    {
-      id: 1,
-      number: '01',
-      title: '设计师的 AI 工具应用',
-      description: '通过 SeeLayer 半透明教程，设计师可以边看边操作，无需频繁切换窗口，大大提升学习效率和工作流程。',
-      image: '/images/1.png',
-      category: '设计工具',
-    },
-    {
-      id: 2,
-      number: '02',
-      title: '猎头的销售视频制作',
-      description: '利用 SeeLayer 的穿透功能，猎头可以制作不遮挡界面的销售演示视频，让客户更清晰地了解产品特性。',
-      image: '/images/2.png',
-      category: '销售工具',
-    },
-    {
-      id: 3,
-      number: '03',
-      title: '教师的地图讲解应用',
-      description: '教师使用 SeeLayer 进行地图讲解，文字标记可以实时跟随鼠标移动，让地理教学更加生动直观。',
-      image: '/images/3.png',
-      category: '教育工具',
-    },
-    {
-      id: 4,
-      number: '04',
-      title: '程序员的开发工具演示',
-      description: '程序员通过 SeeLayer 制作开发工具教程，鼠标穿透功能确保不影响实际操作，提升技术分享效果。',
-      image: '/images/4.png',
-      category: '开发工具',
-    },
-    {
-      id: 5,
-      number: '05',
-      title: '秘书的商务工具应用',
-      description: '秘书使用 SeeLayer 制作商务工具操作指南，实时更新功能确保教程始终与最新版本同步。',
-      image: '/images/5.png',
-      category: '办公工具',
-    },
-    {
-      id: 6,
-      number: '06',
-      title: '企业内训系统集成',
-      description: '企业将 SeeLayer 集成到内训系统，员工可以快速学习新工具，减少培训成本，提升工作效率。',
-      image: '/images/img1.jpg',
-      category: '企业应用',
-    },
-  ]
-
-  const stats = [
-    { label: '成功案例', value: 128, suffix: '+' },
-    { label: '服务企业', value: 56, suffix: '+' },
-    { label: '用户满意度', value: 98, suffix: '%' },
-    { label: '覆盖行业', value: 12, suffix: '+' },
-  ]
-
   return (
     <div className="min-h-screen w-full max-w-full overflow-x-hidden" style={{ backgroundColor: '#EFEFE9' }}>
       <Header showHero={true} />
@@ -320,15 +266,15 @@ const Home = () => {
       </section>
 
       {/* Image Boxes Section - 从 HTML 文件提取的功能 */}
-      <section className="py-20 bg-gradient-to-b from-gray-50 to-white my-5">
-        <div className="container mx-auto">
+      <section className="py-10 md:py-20 bg-gradient-to-b from-gray-50 to-white my-5 overflow-hidden">
+        <div className="container mx-auto px-4 md:px-0">
           <div className="w-full mx-auto flex justify-center" style={{ maxWidth: '1600px' }}>
             {/* Swiper 容器 */}
-            <div className="relative" style={{ height: '400px', width: '100%', overflow: 'visible' }}>
+            <div className="relative" style={{ height: windowWidth < 768 ? 'auto' : '400px', width: '100%', overflow: 'visible' }}>
               <div 
                 className="flex items-center transition-transform duration-500 ease-out h-full"
                 style={{
-                  transform: `translateX(calc(50% - ${820 / 2}px - ${currentSlide} * ${820 + 112}px))`
+                  transform: `translateX(calc(50% - ${(windowWidth < 768 ? windowWidth * 0.85 : 820) / 2}px - ${currentSlide} * ${(windowWidth < 768 ? windowWidth * 0.85 : 820) + (windowWidth < 768 ? 20 : 112)}px))`
                 }}
               >
                 {[1, 2, 3].map((boxIndex, index) => (
@@ -336,8 +282,8 @@ const Home = () => {
                     key={boxIndex}
                     className="flex-shrink-0 flex items-center justify-center"
                     style={{
-                      width: '820px',
-                      marginRight: index < 2 ? '112px' : '0',
+                      width: windowWidth < 768 ? '85vw' : '820px',
+                      marginRight: index < 2 ? (windowWidth < 768 ? '20px' : '112px') : '0',
                       transform: index === currentSlide ? 'scale(1)' : 'scale(0.85)',
                       opacity: index === currentSlide ? 1 : 0.5,
                       transition: 'transform 0.5s ease-out, opacity 0.5s ease-out'
@@ -351,19 +297,19 @@ const Home = () => {
               {/* 导航按钮 */}
               <button
                 onClick={() => setCurrentSlide(Math.max(0, currentSlide - 1))}
-                className="absolute left-4 top-1/2 -translate-y-1/2 z-10 bg-white/90 hover:bg-white rounded-full p-3 shadow-lg transition-all hover:scale-110 disabled:opacity-50 disabled:cursor-not-allowed"
+                className="absolute left-2 md:left-4 top-1/2 -translate-y-1/2 z-10 bg-white/90 hover:bg-white rounded-full p-2 md:p-3 shadow-lg transition-all hover:scale-110 disabled:opacity-50 disabled:cursor-not-allowed"
                 disabled={currentSlide === 0}
               >
-                <svg className="w-6 h-6 text-gray-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <svg className="w-5 h-5 md:w-6 md:h-6 text-gray-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
                 </svg>
               </button>
               <button
                 onClick={() => setCurrentSlide(Math.min(2, currentSlide + 1))}
-                className="absolute right-4 top-1/2 -translate-y-1/2 z-10 bg-white/90 hover:bg-white rounded-full p-3 shadow-lg transition-all hover:scale-110 disabled:opacity-50 disabled:cursor-not-allowed"
+                className="absolute right-2 md:right-4 top-1/2 -translate-y-1/2 z-10 bg-white/90 hover:bg-white rounded-full p-2 md:p-3 shadow-lg transition-all hover:scale-110 disabled:opacity-50 disabled:cursor-not-allowed"
                 disabled={currentSlide === 2}
               >
-                <svg className="w-6 h-6 text-gray-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <svg className="w-5 h-5 md:w-6 md:h-6 text-gray-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
                 </svg>
               </button>

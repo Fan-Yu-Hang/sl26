@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from 'react'
+import { useState, useRef, useEffect, useCallback } from 'react'
 
 interface Mark {
     id: number
@@ -47,129 +47,60 @@ const ImageBox = () => {
     const nextIdRef = useRef(1)
     const boxIndexRef = useRef(0)
     const isInitializingRef = useRef(false) // 标记是否正在初始化图片
+    const [windowWidth, setWindowWidth] = useState(typeof window !== 'undefined' ? window.innerWidth : 1200)
 
-  // 拖拽状态
-  const isDraggingRef = useRef(false)
-  const isPanningRef = useRef(false)
-  const isMarkDraggingRef = useRef(false)
-  const isPinchingRef = useRef(false)
-  const lastXRef = useRef(0)
-  const lastYRef = useRef(0)
-  const lastDistanceRef = useRef(0)
-  const lastScaleRef = useRef(1)
-  const frameRequestedRef = useRef(false)
-  const longPressTimerRef = useRef<Map<number, number>>(new Map())
+    // 拖拽状态
+    const isDraggingRef = useRef(false)
+    const isPanningRef = useRef(false)
+    const isMarkDraggingRef = useRef(false)
+    const isPinchingRef = useRef(false)
+    const lastXRef = useRef(0)
+    const lastYRef = useRef(0)
+    const lastDistanceRef = useRef(0)
+    const lastScaleRef = useRef(1)
+    const frameRequestedRef = useRef(false)
+    const longPressTimerRef = useRef<Map<number, number>>(new Map())
 
     // 工具函数：显示状态提示
-    const showStatus = (text: string, type: 'info' | 'success' | 'error' = 'info') => {
+    const showStatus = useCallback((text: string, type: 'info' | 'success' | 'error' = 'info') => {
         setStatus({ text, type, visible: true })
         setTimeout(() => {
             setStatus(prev => ({ ...prev, visible: false }))
         }, 1800)
-    }
+    }, [])
 
-  // 文件上传处理
-  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0]
-    if (!file) return
+    // 文件上传处理
+    const handleFileUpload = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0]
+        if (!file) return
 
-    if (!ALLOWED_TYPES.includes(file.type)) {
-      showStatus('不支持的图片格式', 'error')
-      if (fileInputRef.current) fileInputRef.current.value = ''
-      return
-    }
+        if (!ALLOWED_TYPES.includes(file.type)) {
+            showStatus('不支持的图片格式', 'error')
+            if (fileInputRef.current) fileInputRef.current.value = ''
+            return
+        }
 
-    if (file.size > MAX_FILE_SIZE) {
-      showStatus('图片文件过大（＜10MB）', 'error')
-      if (fileInputRef.current) fileInputRef.current.value = ''
-      return
-    }
+        if (file.size > MAX_FILE_SIZE) {
+            showStatus('图片文件过大（＜10MB）', 'error')
+            if (fileInputRef.current) fileInputRef.current.value = ''
+            return
+        }
 
-    showStatus('加载中…', 'info')
-    const reader = new FileReader()
-    reader.onload = () => {
-      const result = reader.result as string
-      setImageSrc(result)
-    }
-    reader.onerror = () => {
-      showStatus('上传失败', 'error')
-      if (fileInputRef.current) fileInputRef.current.value = ''
-    }
-    reader.readAsDataURL(file)
-  }
-
-  // 图片加载完成处理（参考 index2.html 的逻辑）
-  useEffect(() => {
-    const img = imageRef.current
-    if (!img || !imageSrc) return
-
-    const handleLoad = () => {
-      if (!img.naturalWidth || !img.naturalHeight) return
-      
-      // 标记正在初始化，避免 useEffect 中的 updateTransform 覆盖居中位置
-      isInitializingRef.current = true
-      
-      // 先设置图片尺寸（参考 index2.html 第497-498行）
-      nwRef.current = img.naturalWidth
-      nhRef.current = img.naturalHeight
-
-      if (!imageBoxRef.current) {
-        isInitializingRef.current = false
-        return
-      }
-      const rect = imageBoxRef.current.getBoundingClientRect()
-      const cw = rect.width
-      const ch = rect.height
-
-      // 计算基础缩放（参考 index2.html 第501行）
-      baseScaleRef.current = Math.min(cw / nwRef.current, ch / nhRef.current)
-      
-      // 重置状态（参考 index2.html 第502-503行）
-      txRef.current = 0
-      tyRef.current = 0
-      
-      // 计算居中位置（参考 index2.html 第504-507行）
-      const sw = nwRef.current * baseScaleRef.current
-      const sh = nhRef.current * baseScaleRef.current
-      const centerTx = (cw - sw) / 2
-      const centerTy = (ch - sh) / 2
-
-      // 直接设置 transform（参考 index2.html 第508行），不调用 updateTransform
-      img.style.transform = `translate3d(${centerTx}px, ${centerTy}px, 0) scale(${baseScaleRef.current})`
-      
-      // 更新滑条和状态（参考 index2.html 第509-516行）
-      updateSliderByScale()
-      setUserScale(1) // 在设置完 transform 后再更新 state
-      setAdjustMode(true)
-      setSliderLocked(false)
-      // 保留已有的标记点，不清空
-      // setMarks([]) - 已移除，保留标记点
-      // nextIdRef.current = 1 - 已移除，保留当前ID序列
-      showStatus('上传成功', 'success')
-      if (overlayRef.current) {
-        overlayRef.current.style.pointerEvents = 'none'
-      }
-      
-      // 初始化完成，允许后续的 updateTransform 调用
-      setTimeout(() => {
-        isInitializingRef.current = false
-      }, 100)
-    }
-
-    // 如果图片已经加载完成
-    if (img.complete && img.naturalWidth > 0 && img.naturalHeight > 0) {
-      // 使用 requestAnimationFrame 确保 DOM 已更新（参考 index2.html）
-      requestAnimationFrame(() => {
-        requestAnimationFrame(handleLoad)
-      })
-    } else {
-      img.addEventListener('load', handleLoad)
-      return () => img.removeEventListener('load', handleLoad)
-    }
-  }, [imageSrc])
+        showStatus('加载中…', 'info')
+        const reader = new FileReader()
+        reader.onload = () => {
+            const result = reader.result as string
+            setImageSrc(result)
+        }
+        reader.onerror = () => {
+            showStatus('上传失败', 'error')
+            if (fileInputRef.current) fileInputRef.current.value = ''
+        }
+        reader.readAsDataURL(file)
+    }, [showStatus])
 
     // 更新滑条位置
-    const updateSliderByScale = () => {
+    const updateSliderByScale = useCallback(() => {
         if (!sliderRef.current || !knobRef.current) return
         const trackHeight = 160
         const knobHeight = 16
@@ -178,29 +109,10 @@ const ImageBox = () => {
         const t = (userScale - min) / (max - min)
         const y = (1 - t) * (trackHeight - knobHeight) + knobHeight / 2
         knobRef.current.style.top = `${y}px`
-    }
-
-    // 更新图片变换
-    const updateTransform = () => {
-        if (!imageBoxRef.current || !imageRef.current || !imageSrc) return
-
-        const rect = imageBoxRef.current.getBoundingClientRect()
-        const cw = rect.width
-        const ch = rect.height
-        const scale = baseScaleRef.current * userScale
-        const sw = nwRef.current * scale
-        const sh = nhRef.current * scale
-        const centerTx = (cw - sw) / 2
-        const centerTy = (ch - sh) / 2
-        const finalX = centerTx + txRef.current
-        const finalY = centerTy + tyRef.current
-
-        imageRef.current.style.transform = `translate3d(${finalX}px, ${finalY}px, 0) scale(${scale})`
-        applyClampedTransform()
-    }
+    }, [userScale])
 
     // 应用边界限制的变换
-    const applyClampedTransform = () => {
+    const applyClampedTransform = useCallback(() => {
         if (!imageBoxRef.current || !imageRef.current || !imageSrc) return
 
         const rect = imageBoxRef.current.getBoundingClientRect()
@@ -237,72 +149,27 @@ const ImageBox = () => {
         if (imageRef.current) {
             imageRef.current.style.transform = `translate(${finalX}px, ${finalY}px) scale(${scale})`
         }
-    }
+    }, [imageSrc, userScale])
 
-    // 当 userScale 改变时更新变换（图片加载时由 handleLoad 处理，这里不重复调用）
-    useEffect(() => {
-        // 如果正在初始化，不调用 updateTransform，避免覆盖居中位置
-        if (isInitializingRef.current) return
-        if (imageSrc && nwRef.current > 0 && nhRef.current > 0) {
-            updateTransform()
-            updateSliderByScale()
-        }
-    }, [userScale])
+    // 更新图片变换
+    const updateTransform = useCallback(() => {
+        if (!imageBoxRef.current || !imageRef.current || !imageSrc) return
 
-    // 缩放滑条处理
-    const scaleFromPos = (y: number) => {
-        const trackHeight = 160
-        const knobHeight = 16
-        const min = 1
-        const max = 3
-        const clampedY = Math.max(knobHeight / 2, Math.min(trackHeight - knobHeight / 2, y))
-        const t = 1 - (clampedY - knobHeight / 2) / (trackHeight - knobHeight)
-        return min + t * (max - min)
-    }
+        const rect = imageBoxRef.current.getBoundingClientRect()
+        const cw = rect.width
+        const ch = rect.height
+        const scale = baseScaleRef.current * userScale
+        const sw = nwRef.current * scale
+        const sh = nhRef.current * scale
+        const centerTx = (cw - sw) / 2
+        const centerTy = (ch - sh) / 2
+        const finalX = centerTx + txRef.current
+        const finalY = centerTy + tyRef.current
 
-    const handleSliderMouseDown = (e: React.MouseEvent<HTMLDivElement>) => {
-        if (sliderLocked) {
-            showStatus('请点击"调整图片"按钮启用调整模式', 'info')
-            return
-        }
-        e.preventDefault()
-        e.stopPropagation()
-        isDraggingRef.current = true
+        imageRef.current.style.transform = `translate3d(${finalX}px, ${finalY}px, 0) scale(${scale})`
+        applyClampedTransform()
+    }, [imageSrc, userScale, applyClampedTransform])
 
-        if (sliderRef.current) {
-            const rect = sliderRef.current.getBoundingClientRect()
-            const y = e.clientY - rect.top
-            const newScale = scaleFromPos(y)
-            setUserScale(Number(newScale.toFixed(2)))
-            if (newScale === 1) {
-                txRef.current = 0
-                tyRef.current = 0
-            }
-        }
-
-        const handleMouseMove = (e: MouseEvent) => {
-            if (!isDraggingRef.current || !sliderRef.current) return
-            const rect = sliderRef.current.getBoundingClientRect()
-            const y = e.clientY - rect.top
-            const newScale = scaleFromPos(y)
-            setUserScale(Number(newScale.toFixed(2)))
-            if (newScale === 1) {
-                txRef.current = 0
-                tyRef.current = 0
-            }
-        }
-
-        const handleMouseUp = () => {
-            isDraggingRef.current = false
-            window.removeEventListener('mousemove', handleMouseMove)
-            window.removeEventListener('mouseup', handleMouseUp)
-        }
-
-        window.addEventListener('mousemove', handleMouseMove)
-        window.addEventListener('mouseup', handleMouseUp)
-    }
-
-    // 图片平移处理
     // 计算两点之间的距离
     const getDistance = (touch1: { clientX: number; clientY: number }, touch2: { clientX: number; clientY: number }) => {
         const dx = touch1.clientX - touch2.clientX
@@ -310,24 +177,9 @@ const ImageBox = () => {
         return Math.sqrt(dx * dx + dy * dy)
     }
 
-    const handlePanStart = (e: React.MouseEvent) => {
-        if (!imageSrc) return
-        
-        // 鼠标：平移操作
-        if (!adjustMode && userScale <= 1) return
-        isPanningRef.current = true
-        isPinchingRef.current = false
-        lastXRef.current = e.clientX
-        lastYRef.current = e.clientY
-        if (imageBoxRef.current) {
-            imageBoxRef.current.style.cursor = 'grabbing'
-        }
-    }
-
-    const handlePanMove = (e: MouseEvent | TouchEvent) => {
+    const handlePanMove = useCallback((e: MouseEvent | TouchEvent) => {
         // 双指缩放
         if ('touches' in e && e.touches.length === 2 && isPinchingRef.current) {
-            // 立即阻止默认行为，防止页面缩放（特别是放大时）
             e.preventDefault()
             e.stopPropagation()
             if (!imageBoxRef.current || sliderLocked) return
@@ -384,14 +236,148 @@ const ImageBox = () => {
                 frameRequestedRef.current = false
             })
         }
-    }
+    }, [userScale, sliderLocked, applyClampedTransform])
 
-    const handlePanEnd = () => {
+    const handlePanEnd = useCallback(() => {
         isPanningRef.current = false
         isPinchingRef.current = false
         lastDistanceRef.current = 0
         if (imageBoxRef.current) {
             imageBoxRef.current.style.cursor = adjustMode ? 'grab' : 'pointer'
+        }
+    }, [adjustMode])
+
+    useEffect(() => {
+        const handleResize = () => setWindowWidth(window.innerWidth)
+        window.addEventListener('resize', handleResize)
+        return () => window.removeEventListener('resize', handleResize)
+    }, [])
+
+    // 图片加载完成处理
+    useEffect(() => {
+        const img = imageRef.current
+        if (!img || !imageSrc) return
+
+        const handleLoad = () => {
+            if (!img.naturalWidth || !img.naturalHeight) return
+            
+            isInitializingRef.current = true
+            nwRef.current = img.naturalWidth
+            nhRef.current = img.naturalHeight
+
+            if (!imageBoxRef.current) {
+                isInitializingRef.current = false
+                return
+            }
+            const rect = imageBoxRef.current.getBoundingClientRect()
+            const cw = rect.width
+            const ch = rect.height
+
+            baseScaleRef.current = Math.min(cw / nwRef.current, ch / nhRef.current)
+            txRef.current = 0
+            tyRef.current = 0
+            
+            const sw = nwRef.current * baseScaleRef.current
+            const sh = nhRef.current * baseScaleRef.current
+            const centerTx = (cw - sw) / 2
+            const centerTy = (ch - sh) / 2
+
+            img.style.transform = `translate3d(${centerTx}px, ${centerTy}px, 0) scale(${baseScaleRef.current})`
+            
+            updateSliderByScale()
+            setUserScale(1)
+            setAdjustMode(true)
+            setSliderLocked(false)
+            showStatus('上传成功', 'success')
+            if (overlayRef.current) {
+                overlayRef.current.style.pointerEvents = 'none'
+            }
+            
+            setTimeout(() => {
+                isInitializingRef.current = false
+            }, 100)
+        }
+
+        if (img.complete && img.naturalWidth > 0 && img.naturalHeight > 0) {
+            requestAnimationFrame(() => {
+                requestAnimationFrame(handleLoad)
+            })
+        } else {
+            img.addEventListener('load', handleLoad)
+            return () => img.removeEventListener('load', handleLoad)
+        }
+    }, [imageSrc, updateSliderByScale, showStatus])
+
+    useEffect(() => {
+        if (isInitializingRef.current) return
+        if (imageSrc && nwRef.current > 0 && nhRef.current > 0) {
+            updateTransform()
+            updateSliderByScale()
+        }
+    }, [userScale, imageSrc, updateTransform, updateSliderByScale])
+
+    // 缩放滑条处理
+    const scaleFromPos = (y: number) => {
+        const trackHeight = 160
+        const knobHeight = 16
+        const min = 1
+        const max = 3
+        const clampedY = Math.max(knobHeight / 2, Math.min(trackHeight - knobHeight / 2, y))
+        const t = 1 - (clampedY - knobHeight / 2) / (trackHeight - knobHeight)
+        return min + t * (max - min)
+    }
+
+    const handleSliderMouseDown = (e: React.MouseEvent<HTMLDivElement>) => {
+        if (sliderLocked) {
+            showStatus('请点击"调整图片"按钮启用调整模式', 'info')
+            return
+        }
+        e.preventDefault()
+        e.stopPropagation()
+        isDraggingRef.current = true
+
+        if (sliderRef.current) {
+            const rect = sliderRef.current.getBoundingClientRect()
+            const y = e.clientY - rect.top
+            const newScale = scaleFromPos(y)
+            setUserScale(Number(newScale.toFixed(2)))
+            if (newScale === 1) {
+                txRef.current = 0
+                tyRef.current = 0
+            }
+        }
+
+        const handleMouseMove = (e: MouseEvent) => {
+            if (!isDraggingRef.current || !sliderRef.current) return
+            const rect = sliderRef.current.getBoundingClientRect()
+            const y = e.clientY - rect.top
+            const newScale = scaleFromPos(y)
+            setUserScale(Number(newScale.toFixed(2)))
+            if (newScale === 1) {
+                txRef.current = 0
+                tyRef.current = 0
+            }
+        }
+
+        const handleMouseUp = () => {
+            isDraggingRef.current = false
+            window.removeEventListener('mousemove', handleMouseMove)
+            window.removeEventListener('mouseup', handleMouseUp)
+        }
+
+        window.addEventListener('mousemove', handleMouseMove)
+        window.addEventListener('mouseup', handleMouseUp)
+    }
+
+    const handlePanStart = (e: React.MouseEvent) => {
+        if (!imageSrc) return
+        if (!adjustMode && userScale <= 1) return
+        isPanningRef.current = true
+        isPinchingRef.current = false
+        lastXRef.current = e.clientX
+        lastYRef.current = e.clientY
+        if (imageBoxRef.current) {
+            imageBoxRef.current.style.cursor = 'grabbing'
         }
     }
 
@@ -402,11 +388,9 @@ const ImageBox = () => {
         const handleMouseMove = (e: MouseEvent) => handlePanMove(e)
         const handleMouseUp = () => handlePanEnd()
         
-        // 触摸开始：检测双指操作（参考 index2.html，但添加双指缩放支持）
         const handleTouchStart = (e: TouchEvent) => {
             if (!imageSrc) return
             
-            // 双指操作：阻止默认行为并开始缩放
             if (e.touches.length === 2) {
                 e.preventDefault()
                 e.stopPropagation()
@@ -420,7 +404,6 @@ const ImageBox = () => {
                 lastDistanceRef.current = distance
                 lastScaleRef.current = userScale
             } else if (e.touches.length === 1) {
-                // 单指操作：平移（参考 index2.html）
                 if (!adjustMode && userScale <= 1) return
                 isPanningRef.current = true
                 isPinchingRef.current = false
@@ -433,9 +416,7 @@ const ImageBox = () => {
             }
         }
         
-        // 触摸移动：双指时阻止默认行为，单指时不阻止（参考 index2.html）
         const handleTouchMove = (e: TouchEvent) => {
-            // 双指操作时阻止默认行为（防止页面缩放）
             if (e.touches.length === 2 || isPinchingRef.current) {
                 e.preventDefault()
                 e.stopPropagation()
@@ -447,9 +428,7 @@ const ImageBox = () => {
 
         viewport.addEventListener('mousemove', handleMouseMove)
         window.addEventListener('mouseup', handleMouseUp)
-        // touchstart 使用 passive: false，因为需要检测双指并调用 preventDefault
         viewport.addEventListener('touchstart', handleTouchStart, { passive: false })
-        // touchmove 使用 passive: false，因为双指时需要调用 preventDefault
         viewport.addEventListener('touchmove', handleTouchMove, { passive: false })
         viewport.addEventListener('touchend', handleTouchEnd, { passive: true })
         viewport.addEventListener('touchcancel', handleTouchEnd, { passive: true })
@@ -462,9 +441,8 @@ const ImageBox = () => {
             viewport.removeEventListener('touchend', handleTouchEnd)
             viewport.removeEventListener('touchcancel', handleTouchEnd)
         }
-    }, [adjustMode, userScale, imageSrc, sliderLocked])
+    }, [adjustMode, userScale, imageSrc, sliderLocked, handlePanEnd, handlePanMove, showStatus])
 
-    // 鼠标滚轮缩放（使用原生事件监听器，参考 index2.html）
     useEffect(() => {
         const imageBox = imageBoxRef.current
         if (!imageBox) return
@@ -506,17 +484,12 @@ const ImageBox = () => {
             updateTransform()
         }
 
-        // 使用 passive: false 确保可以调用 preventDefault（参考 index2.html）
         imageBox.addEventListener('wheel', handleWheel, { passive: false })
-
-        return () => {
-            imageBox.removeEventListener('wheel', handleWheel)
-        }
-    }, [imageSrc, sliderLocked, userScale])
+        return () => imageBox.removeEventListener('wheel', handleWheel)
+    }, [imageSrc, sliderLocked, userScale, updateSliderByScale, updateTransform, showStatus])
 
     // 双击添加标记点
     const handleDoubleClick = (e: React.MouseEvent<HTMLDivElement>) => {
-        // 只有在锁定状态下才能新增序号
         if (adjustMode) {
             showStatus('请先切换到锁定状态才能添加标记点', 'info')
             return
@@ -526,7 +499,6 @@ const ImageBox = () => {
             return
         }
         const rect = imageBoxRef.current.getBoundingClientRect()
-        // 直接使用鼠标点击位置，标记点使用 translate(-50%, -50%) 居中
         const x = e.clientX - rect.left
         const y = e.clientY - rect.top
         const newMark: Mark = {
@@ -538,7 +510,6 @@ const ImageBox = () => {
         setSelectedMarkId(newMark.id)
         setCurrentTextId(newMark.id)
         ensureTextAreaForId(newMark.id)
-        syncSequence()
     }
 
     // 标记点点击
@@ -547,38 +518,28 @@ const ImageBox = () => {
         setCurrentTextId(id)
     }
 
-    // 标记点删除：只删掉该点，其它点位置不动，内部 id 不变
+    // 标记点删除
     const handleDeleteMark = (id: number) => {
-        // 从列表中移除该标记，其它保持原样（位置和内部 id 都不改）
         const filteredMarks = marks.filter(m => m.id !== id)
         setMarks(filteredMarks)
         setSelectedMarkId(null)
         setCurrentTextId(null)
 
-        // 删除对应 id 的文字，其他文字保持不变
         const newTextStore = new Map(textStore)
         newTextStore.delete(id)
         setTextStore(newTextStore)
-
-        // 下一个 id 继续自增（不因为删除而回退），避免已有点的内部 id 改变
-        // nextIdRef.current 保持不动
-
-        syncSequence()
-        // 关闭 popover
         closeDeletePopover()
     }
 
     // 显示删除菜单
     const showDeletePopover = (markId: number, markX: number, markY: number) => {
-        // 只有在锁定状态下才能删除序号
         if (adjustMode) {
             showStatus('请先切换到锁定状态才能删除标记点', 'info')
             return
         }
         setPopoverMarkId(markId)
-        // 显示在标记点右边
         setPopoverPosition({
-            left: markX + 20, // 标记点右边 20px
+            left: markX + 20,
             top: markY
         })
     }
@@ -592,7 +553,6 @@ const ImageBox = () => {
     // 点击外部关闭 popover
     useEffect(() => {
         if (!popoverMarkId) return
-
         const handleClickOutside = (e: MouseEvent) => {
             const target = e.target as Node
             const popover = document.querySelector('.delete-popover')
@@ -600,11 +560,8 @@ const ImageBox = () => {
                 closeDeletePopover()
             }
         }
-
         document.addEventListener('click', handleClickOutside, true)
-        return () => {
-            document.removeEventListener('click', handleClickOutside, true)
-        }
+        return () => document.removeEventListener('click', handleClickOutside, true)
     }, [popoverMarkId])
 
     // 标记点拖拽
@@ -637,14 +594,12 @@ const ImageBox = () => {
             isMarkDraggingRef.current = false
             window.removeEventListener('mousemove', handleDragMove)
             window.removeEventListener('mouseup', handleDragEnd)
-            syncSequence()
         }
 
         window.addEventListener('mousemove', handleDragMove)
         window.addEventListener('mouseup', handleDragEnd, { once: true })
     }
 
-    // 确保文字区域存在
     const ensureTextAreaForId = (id: number) => {
         if (textStore.has(id)) return
         const newStore = new Map(textStore)
@@ -652,12 +607,6 @@ const ImageBox = () => {
         setTextStore(newStore)
     }
 
-    // 同步序列条
-    const syncSequence = () => {
-        // 序列条会通过 marks 状态自动更新
-    }
-
-    // 调整模式切换
     const handleAdjustToggle = () => {
         const newAdjustMode = !adjustMode
         setAdjustMode(newAdjustMode)
@@ -670,7 +619,6 @@ const ImageBox = () => {
         }
     }
 
-    // 删除图片
     const handleDelete = () => {
         if (!imageSrc) return
         if (imageRef.current) {
@@ -678,10 +626,6 @@ const ImageBox = () => {
             imageRef.current.style.transform = ''
         }
         setImageSrc('')
-        // 保留标记点和文字，不清空
-        // setMarks([]) - 已移除，保留标记点
-        // setTextStore(new Map()) - 已移除，保留文字
-        // nextIdRef.current = 1 - 已移除，保留ID序列
         setSelectedMarkId(null)
         setCurrentTextId(null)
         setUserScale(1)
@@ -691,24 +635,6 @@ const ImageBox = () => {
         setSliderLocked(true)
         showStatus('已清除图片，标记点已保留', 'success')
     }
-
-    // localStorage 存储和加载
-    useEffect(() => {
-        // const key = `textStore-${boxIndexRef.current}`
-        // try {
-        //     const stored = localStorage.getItem(key)
-        //     if (stored) {
-        //         const obj = JSON.parse(stored)
-        //         const newStore = new Map<number, string>()
-        //         Object.keys(obj).forEach(k => {
-        //             newStore.set(Number(k), obj[k])
-        //         })
-        //         setTextStore(newStore)
-        //     }
-        // } catch (e) {
-        //     console.error('Failed to load text store:', e)
-        // }
-    }, [])
 
     useEffect(() => {
         const key = `textStore-${boxIndexRef.current}`
@@ -723,17 +649,16 @@ const ImageBox = () => {
         }
     }, [textStore])
 
-
     return (
-        <div className="w-[820px] h-[362px] relative flex flex-col items-center w-full">
+        <div className="relative flex flex-col items-center w-full max-w-[820px] mx-auto">
             {/* 主容器：图片框 + 文字面板和序列条 */}
-            <div className="flex flex-col md:flex-row gap-6 items-start w-full">
+            <div className="flex flex-col md:flex-row gap-4 md:gap-6 items-center md:items-start w-full px-4 md:px-0">
                 {/* 左侧：缩放滑条 + 图片框 */}
-                <div className="relative flex-shrink-0">
+                <div className="relative flex-shrink-0 w-full md:w-auto flex flex-row items-center">
                     {/* 缩放滑条 */}
                     <div
                         ref={sliderRef}
-                        className="absolute right-full mr-8 w-2.5 h-48 rounded-full bg-gradient-to-b from-gray-200 to-gray-300 shadow-inner cursor-pointer"
+                        className="hidden md:block absolute right-full mr-4 md:mr-8 w-2 md:w-2.5 h-40 md:h-48 rounded-full bg-gradient-to-b from-gray-200 to-gray-300 shadow-inner cursor-pointer"
                         style={{ transform: 'translateY(-50%)', top: '50%' }}
                         onMouseDown={handleSliderMouseDown}
                         onClick={(e) => {
@@ -753,7 +678,7 @@ const ImageBox = () => {
                     >
                         <div
                             ref={knobRef}
-                            className="absolute left-1/2 w-4 h-4 rounded-full bg-blue-600 shadow-lg cursor-ns-resize hover:bg-blue-700 transition-colors"
+                            className="absolute left-1/2 w-3.5 h-3.5 md:w-4 md:h-4 rounded-full bg-blue-600 shadow-lg cursor-ns-resize hover:bg-blue-700 transition-colors"
                             style={{
                                 transform: 'translate(-50%, -50%)',
                                 top: `${(1 - (userScale - 1) / 2) * 100}%`,
@@ -768,22 +693,19 @@ const ImageBox = () => {
                     {/* 图片框 */}
                     <div
                         ref={imageBoxRef}
-                        className="relative w-full md:w-[500px] h-[300px] bg-gradient-to-b from-white to-gray-100 border border-gray-200 rounded-lg shadow-md overflow-hidden cursor-pointer hover:shadow-lg transition-shadow"
+                        className="relative w-full md:w-[500px] h-[250px] md:h-[300px] bg-gradient-to-b from-white to-gray-100 border border-gray-200 rounded-lg shadow-md overflow-hidden cursor-pointer hover:shadow-lg transition-shadow flex-grow"
                         onDoubleClick={handleDoubleClick}
-                        // wheel 事件在原生事件监听器中处理，避免 passive 事件监听器错误
                         style={{ 
                             cursor: adjustMode ? 'grab' : 'pointer',
-                            touchAction: 'none' // 阻止默认触摸行为，防止页面缩放
+                            touchAction: 'none'
                         }}
                     >
-                        {/* 提示文字（无图片时显示） */}
                         {!imageSrc && (
-                                    <div className="absolute inset-0 flex items-center justify-center bg-gray-50/55 backdrop-blur-sm text-gray-600 text-sm user-select-none pointer-events-none z-0">
-                                上传图片 &lt; 10MB（PNG / JPG / JPEG / WebP）
+                            <div className="absolute inset-0 flex items-center justify-center bg-gray-50/55 backdrop-blur-sm text-gray-600 text-xs md:text-sm user-select-none pointer-events-none z-0 px-4 text-center">
+                                上传图片 &lt; 10MB (PNG/JPG/WEBP)
                             </div>
                         )}
 
-                        {/* Viewport - 使用 grid 布局，参考 index2.html */}
                         <div
                             ref={viewportRef}
                             className="absolute inset-0 pointer-events-auto"
@@ -801,6 +723,7 @@ const ImageBox = () => {
                                     ref={imageRef}
                                     src={imageSrc}
                                     alt=""
+                                    draggable={false}
                                     className="max-w-none max-h-none select-none pointer-events-auto"
                                     style={{
                                         transformOrigin: 'top left',
@@ -809,14 +732,11 @@ const ImageBox = () => {
                                         backfaceVisibility: 'hidden',
                                         WebkitUserSelect: 'none',
                                         userSelect: 'none',
-                                        WebkitUserDrag: 'none',
-                                        userDrag: 'none',
                                     }}
                                 />
                             )}
                         </div>
 
-                        {/* 标记点覆盖层 - 始终显示 */}
                         <div
                             ref={overlayRef}
                             className="absolute inset-0 pointer-events-none z-10"
@@ -851,7 +771,6 @@ const ImageBox = () => {
                                     }}
                                     onTouchStart={(e) => {
                                         e.stopPropagation()
-                                        // 移动端长按触发删除菜单
                                         const timer = window.setTimeout(() => {
                                             showDeletePopover(mark.id, mark.x, mark.y)
                                         }, 500)
@@ -859,7 +778,6 @@ const ImageBox = () => {
                                     }}
                                     onTouchEnd={(e) => {
                                         e.stopPropagation()
-                                        // 清除长按定时器
                                         const timer = longPressTimerRef.current.get(mark.id)
                                         if (timer) {
                                             clearTimeout(timer)
@@ -868,7 +786,6 @@ const ImageBox = () => {
                                     }}
                                     onTouchCancel={(e) => {
                                         e.stopPropagation()
-                                        // 清除长按定时器
                                         const timer = longPressTimerRef.current.get(mark.id)
                                         if (timer) {
                                             clearTimeout(timer)
@@ -876,20 +793,16 @@ const ImageBox = () => {
                                         }
                                     }}
                                 >
-                                    <span
-                                        className={`text-xs font-bold ${selectedMarkId === mark.id ? 'text-white' : 'text-black'
-                                            }`}
-                                    >
+                                    <span className={`text-[10px] md:text-xs font-bold ${selectedMarkId === mark.id ? 'text-white' : 'text-black'}`}>
                                         {displayIndex}
                                     </span>
                                 </div>
                             )})}
                         </div>
 
-                        {/* 删除菜单 Popover */}
                         {popoverMarkId && popoverPosition && (
                             <div
-                                className="absolute bg-white border border-gray-200 rounded-lg shadow-lg px-2 py-1.5 text-xs text-gray-800 z-30 flex items-center"
+                                className="delete-popover absolute bg-white border border-gray-200 rounded-lg shadow-lg px-2 py-1.5 text-xs text-gray-800 z-30 flex items-center"
                                 style={{
                                     left: `${popoverPosition.left}px`,
                                     top: `${popoverPosition.top}px`,
@@ -908,16 +821,8 @@ const ImageBox = () => {
                             </div>
                         )}
 
-                        {/* 状态提示 */}
                         {status.visible && (
-                            <div
-                                className={`absolute left-2.5 bottom-2.5 px-2.5 py-1.5 text-xs font-semibold rounded-lg text-white shadow-md backdrop-blur-sm z-20 ${status.type === 'info'
-                                        ? 'bg-gray-700/90'
-                                        : status.type === 'success'
-                                            ? 'bg-teal-700/90'
-                                            : 'bg-red-700/90'
-                                    }`}
-                            >
+                            <div className={`absolute left-2.5 bottom-2.5 px-2.5 py-1.5 text-xs font-semibold rounded-lg text-white shadow-md backdrop-blur-sm z-20 ${status.type === 'info' ? 'bg-gray-700/90' : status.type === 'success' ? 'bg-teal-700/90' : 'bg-red-700/90'}`}>
                                 {status.text}
                             </div>
                         )}
@@ -929,48 +834,41 @@ const ImageBox = () => {
                             onChange={handleFileUpload}
                         />
                     </div>
-
-                    {/* 操作按钮 */}
-                    <div className="flex gap-2 mt-4 w-full justify-between">
-                        <button
-                            className={`px-4 py-2 rounded text-sm font-medium transition-all ${adjustMode
-                                    ? 'bg-green-500 text-white border border-green-500'
-                                    : 'bg-gray-400 text-white border border-gray-400'
-                                }`}
-                            onClick={handleAdjustToggle}
-                        >
-                            {adjustMode ? '调整图片' : '锁定状态'}
-                        </button>
-                        <button
-                            className="px-4 py-2 rounded text-sm font-medium bg-white text-green-600 border border-green-600 hover:bg-green-50 transition-colors"
-                            onClick={() => fileInputRef.current?.click()}
-                        >
-                            新增/替换
-                        </button>
-                        <button
-                            className="px-4 py-2 rounded text-sm font-medium bg-white text-red-600 border border-red-600 hover:bg-red-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                            onClick={handleDelete}
-                            disabled={!imageSrc}
-                        >
-                            删除
-                        </button>
-                    </div>
                 </div>
 
-                {/* 右侧：文字面板和序列条 */}
-                <div className="flex gap-5 flex-1 w-full md:w-auto mt-4 md:mt-0 relative">
+                {/* 移动端操作按钮 */}
+                <div className="flex md:hidden flex-wrap gap-2 w-full justify-center px-4">
+                    <button
+                        className={`px-3 py-1.5 rounded text-xs font-medium transition-all ${adjustMode ? 'bg-green-500 text-white' : 'bg-gray-400 text-white'}`}
+                        onClick={handleAdjustToggle}
+                    >
+                        {adjustMode ? '调整图片' : '锁定状态'}
+                    </button>
+                    <button
+                        className="px-3 py-1.5 rounded text-xs font-medium bg-white text-green-600 border border-green-600"
+                        onClick={() => fileInputRef.current?.click()}
+                    >
+                        新增/替换
+                    </button>
+                    <button
+                        className="px-3 py-1.5 rounded text-xs font-medium bg-white text-red-600 border border-red-600 disabled:opacity-50"
+                        onClick={handleDelete}
+                        disabled={!imageSrc}
+                    >
+                        删除
+                    </button>
+                </div>
+
+                {/* 文字面板 */}
+                <div className="flex gap-3 md:gap-5 flex-1 w-full md:w-auto relative">
                     <div
                         ref={textPanelRef}
-                        className="min-w-0"
-                        style={{ height: '300px', width: '200px' }}
+                        className="flex-grow md:flex-initial"
+                        style={{ height: windowWidth < 768 ? '150px' : '300px', width: windowWidth < 768 ? '100%' : '200px' }}
                     >
                         <textarea
                             className="w-full h-full border border-gray-300 rounded-lg p-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent resize-none"
-                            placeholder={currentTextId ? (() => {
-                                const markIndex = marks.findIndex(m => m.id === currentTextId)
-                                const displayIndex = markIndex >= 0 ? markIndex + 1 : currentTextId
-                                return `输入标记 ${displayIndex} 的文字说明...`
-                            })() : '选择一个标记点来输入文字说明'}
+                            placeholder={currentTextId ? `输入标记 ${marks.findIndex(m => m.id === currentTextId) + 1} 的文字说明...` : '选择标记点输入说明'}
                             value={currentTextId ? (textStore.get(currentTextId) || '') : ''}
                             onChange={(e) => {
                                 if (currentTextId) {
@@ -985,24 +883,42 @@ const ImageBox = () => {
                     <div
                         ref={seqBarRef}
                         className="w-8 flex flex-col gap-1 overflow-y-auto flex-shrink-0"
-                        style={{ height: '224px' }}
+                        style={{ height: windowWidth < 768 ? '150px' : '224px' }}
                     >
-                        {marks.map((mark, index) => {
-                            const displayIndex = index + 1
-                            return (
+                        {marks.map((mark, index) => (
                             <div
                                 key={mark.id}
-                                className={`w-5 h-5 rounded-full border-2 flex items-center justify-center text-xs font-bold cursor-pointer transition-all mx-auto ${selectedMarkId === mark.id
-                                        ? 'bg-blue-500 border-blue-500 text-white'
-                                        : 'bg-transparent border-green-700 text-black'
-                                    }`}
+                                className={`w-5 h-5 rounded-full border-2 flex items-center justify-center text-[10px] font-bold cursor-pointer transition-all mx-auto ${selectedMarkId === mark.id ? 'bg-blue-500 border-blue-500 text-white' : 'bg-transparent border-green-700 text-black'}`}
                                 onClick={() => handleMarkClick(mark.id)}
                             >
-                                {displayIndex}
+                                {index + 1}
                             </div>
-                        )})}
+                        ))}
                     </div>
                 </div>
+            </div>
+
+            {/* 桌面端操作按钮 */}
+            <div className="hidden md:flex gap-2 mt-4 w-full max-w-[500px] justify-between ml-0 md:ml-[-200px]">
+                <button
+                    className={`px-4 py-2 rounded text-sm font-medium transition-all ${adjustMode ? 'bg-green-500 text-white border border-green-500' : 'bg-gray-400 text-white border border-gray-400'}`}
+                    onClick={handleAdjustToggle}
+                >
+                    {adjustMode ? '调整图片' : '锁定状态'}
+                </button>
+                <button
+                    className="px-4 py-2 rounded text-sm font-medium bg-white text-green-600 border border-green-600 hover:bg-green-50 transition-colors"
+                    onClick={() => fileInputRef.current?.click()}
+                >
+                    新增/替换
+                </button>
+                <button
+                    className="px-4 py-2 rounded text-sm font-medium bg-white text-red-600 border border-red-600 hover:bg-red-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                    onClick={handleDelete}
+                    disabled={!imageSrc}
+                >
+                    删除
+                </button>
             </div>
         </div>
     )
