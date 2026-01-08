@@ -27,6 +27,43 @@ const Home = () => {
   const numberRefs = useRef<HTMLSpanElement[]>([])
   const [currentSlide, setCurrentSlide] = useState(1) // 默认显示中间的（索引1，对应第2个）
 
+  // ImageBox 初始配置数据
+  const imageBoxConfigs = [
+    {
+      initialTitle: 'Example 1',
+      initialImageSrc: '',
+      initialMarks: [],
+      initialTextStore: {},
+      title: '[Map] Label personal location',
+      description: [
+        'Google map is easy to find a public location, if we want to share more info with friends, SeeLayer can offer private notes.',
+        'Not just in real life, but history map, game map, make a treasure hunt map aroud your house in 3 minutes.'
+      ],
+    },
+    {
+      initialTitle: 'Example 2',
+      initialImageSrc: '',
+      initialMarks: [],
+      initialTextStore: {},
+      title: '[UI] Label tutorial steps',
+      description: [
+        'Your old tutorial need refresh, take a new video and upload to YouTube cost too much time, SeeLayer can shorten this process.',
+        'Screenshot, label these steps and add notes. If you want to replace a new image, notes will still be there.'
+      ],
+    },
+    {
+      initialTitle: 'Example 3',
+      initialImageSrc: '',
+      initialMarks: [],
+      initialTextStore: {},
+      title: '[Family Assistant] Label refresh',
+      description: [
+        'Our parents are not familiar with Phone/PC settings. SeeLayer is a dynamic assistant.',
+        'Forget about official tutorial, you can screen shot the setting page, label the steps. And if system update, UI is different, refresh the image and labels is so easy~'
+      ],
+    },
+  ]
+
   useEffect(() => {
     // Handle anchor links
     const handleAnchorClick = (e: MouseEvent) => {
@@ -160,20 +197,20 @@ const Home = () => {
   const features = [
     {
       image: '/images/img1.jpg',
-      title: '半透明界面，方便观看',
+      title: 'Forum image & texts, out of style',
       description:
-        '如果是笔记本用户，在学习教程的时候，不得不频繁在视频、操作软件之间切换，SeeLayer 的教程是半透明',
+        `A forum post may not keep updated, you have to repost the image, and explain with text.SeeLayer's label could move independently, only need to upload the latest screenshot.`,
     },
     {
       image: '/images/img2.jpg',
-      title: '全透明界面，鼠标穿透',
-      description: '鼠标穿透，不影响操作',
+      title: 'YouTube video,upload over and over again',
+      description: `Even if there is only one second of error in the video, it needs to be re-uploaded.SeeLayer's image replace is easy, with text-to-audio that can be edited at any time, the effect is very close to video viewing.`,
     },
     {
       image: '/images/img3.jpg',
-      title: '动态调整，实时更新',
+      title: 'Online editing tool,no audio, no label',
       description:
-        '对厂商来说，每次软件更新了内容，会有一堆人追着问如何操作，之前的功能演示视频，反而成了待更新的错误信息，透见 SeeLayer 的核心俩功能之一，就是实时更新动动鼠标，文字随动',
+        `Choose Google doc or Notion as tutorial is very common, but they don't have audio as an aid, and no specific marks on screenshot.SeeLayer can make this easier, our audio function is ready to launch, welcome have a try~`,
     },
   ]
 
@@ -181,21 +218,21 @@ const Home = () => {
     {
       image: '/images/img4.jpg',
       title: 'To C',
-      subtitle: '优秀的产品体验',
+      subtitle: 'Layer 1, Screenshot Alternative',
       description:
         '目前只有文字功能，之后会加入语音，如果文字标记演示不便，加一段能吐槽的语音，穿透体验比视频来说要好太多，可以留下邮箱，我们会把优先名额，放给排队的用户~',
     },
     {
       image: '/images/img5.jpg',
       title: 'To Ad',
-      subtitle: '自由的广告发布',
+      subtitle: 'Layer 2, Label + Text',
       description:
         '开启定位权限，可发布找搭子的扩列广告，别害羞推销自己，十几亿人，多小众的爱好都有当然，我们更推荐，发布自己的工作流广告，找到正在受苦受难的的远程伙伴，不断交流经验，工作效率提升，工资也能有提升',
     },
     {
       image: '/images/img6.jpg',
       title: 'To B',
-      subtitle: '便捷的实时更新',
+      subtitle: 'Layer 3, Audio Editing',
       description:
         '对厂商来说，每次软件更新了内容，会有一堆人追着问如何操作，之前的功能演示视频，反而成了待更新的错误信息，透见 SeeLayer 的核心俩功能之一，就是实时更新动动鼠标，文字随动',
     },
@@ -268,10 +305,10 @@ const Home = () => {
         <div className="container mx-auto px-4">
           <div className="text-center mb-16">
             <h2 ref={featuresTitleRef} className="text-4xl md:text-5xl font-bold text-gray-900 mb-4 opacity-0">
-              软件导航——职场容易忽视的盲区
+            Making a tutorial video takes too much time o(╥﹏╥)o
             </h2>
             <p className="text-xl text-gray-600 max-w-3xl mx-auto">
-              透见 SeeLayer，发明灵感来源于硬件工作的繁琐，软件的更新，视频/图片的教程，遮盖原来的界面？
+            SeeLayer can save you from repeated work
             </p>
           </div>
 
@@ -287,9 +324,9 @@ const Home = () => {
               >
                 <div className="relative h-64 overflow-hidden">
                   <img
-                    src={feature.image}
+                    // src={feature.image}
                     alt={feature.title}
-                    className="w-full h-full object-cover hover:scale-110 transition-transform duration-500"
+                    className="bg-[#cccccc] w-full h-full object-cover hover:scale-110 transition-transform duration-500"
                   />
                 </div>
                 <div className="p-6">
@@ -308,14 +345,21 @@ const Home = () => {
 
       {/* Main Section */}
       <section id="main" ref={mainSectionRef} className="py-20 bg-white scroll-mt-20 my-5 opacity-0">
-        <div className="container mx-auto px-4 text-center">
-          <h2 className="text-4xl md:text-5xl font-bold text-gray-900 mb-4">
-             操作文档
+        <div className="container mx-auto px-4">
+          <h2 className="text-4xl md:text-5xl font-bold text-gray-900 mb-6 text-center">
+            Have a try
           </h2>
-          <p className="text-xl text-gray-600 max-w-3xl mx-auto">
-            鲜有领导意识到，公司内部缺少学习机制很多工具，员工需要花很大精力去了解如何操作，如何嵌入现有的工作流我们要自己
-            向上管理！
-          </p>
+          <div className="max-w-3xl mx-auto">
+            <ul className="space-y-3 text-left text-lg md:text-lg text-gray-900">
+              <li>- Click Add, upload an image, adjust the image, zoom in or drag</li>
+              <li>- Click Adjust, double click the image, you'll have label numbers(at most 8)</li>
+              <li>- Now you can type text</li>
+              <li>- Move these labels with drag, delete the label with right click</li>
+            </ul>
+            <p className="mt-6 text-sm md:text-base text-gray-600 text-left">
+              *refresh the web, your image and text will be deleted
+            </p>
+          </div>
         </div>
       </section>
 
@@ -324,17 +368,17 @@ const Home = () => {
         <div className="container mx-auto">
           <div className="w-full mx-auto flex justify-center" style={{ maxWidth: '1600px' }}>
             {/* Swiper 容器 */}
-            <div className="relative" style={{ height: '400px', width: '100%', overflow: 'visible' }}>
+            <div className="relative" style={{ minHeight: '600px', width: '100%', overflow: 'visible' }}>
               <div 
                 className="flex items-center transition-transform duration-500 ease-out h-full"
                 style={{
                   transform: `translateX(calc(50% - ${820 / 2}px - ${currentSlide} * ${820 + 112}px))`
                 }}
               >
-                {[1, 2, 3].map((boxIndex, index) => (
+                {imageBoxConfigs.map((config, index) => (
                   <div
-                    key={boxIndex}
-                    className="flex-shrink-0 flex items-center justify-center"
+                    key={index}
+                    className="flex-shrink-0 flex flex-col items-center justify-center"
                     style={{
                       width: '820px',
                       marginRight: index < 2 ? '112px' : '0',
@@ -343,7 +387,28 @@ const Home = () => {
                       transition: 'transform 0.5s ease-out, opacity 0.5s ease-out'
                     }}
                   >
-                    <ImageBox />
+                    <ImageBox 
+                      initialTitle={config.initialTitle}
+                      initialImageSrc={config.initialImageSrc}
+                      initialMarks={config.initialMarks}
+                      initialTextStore={config.initialTextStore}
+                    />
+                    {/* 描述文字 */}
+                    <div className="w-full mt-20 px-4">
+                      <h3 className="text-lg text-center md:text-xl font-bold text-gray-900 mb-3">
+                        {config.title}
+                      </h3>
+                      <div className="space-y-2">
+                        {config.description.map((text, textIndex) => (
+                          <p 
+                            key={textIndex}
+                            className="text-sm md:text-base text-gray-700 leading-relaxed"
+                          >
+                            {text}
+                          </p>
+                        ))}
+                      </div>
+                    </div>
                   </div>
                 ))}
               </div>
@@ -466,12 +531,13 @@ const Home = () => {
         <div className="container mx-auto px-4">
           <div className="text-center mb-16">
             <h2 className="text-4xl md:text-5xl font-bold text-gray-900 mb-4 opacity-0">
-              基本不花钱！嘿嘿嘿 想不到吧
+            Almost Free ^_^
             </h2>
             <p className="text-sm sm:text-base md:text-lg lg:text-xl text-gray-600 max-w-4xl mx-auto leading-relaxed opacity-0" style={{ opacity: 1 }}>
-              <span className="block">透见 SeeLayer 的 90% 功能，免费注册就能实现</span>
-              <span className="block mt-2">"按日计价"意味着，会员时间只算实际打开的天数，并非 365 天计价</span>
-              <span className="block mt-2">比如年初充值成为会员，但是全年实际只使用了 100 天，第二年会员权益还剩 265 天</span>
+              <span className="block">90% of SeeLayer's functions, free to use, the VIP price is 99$ per year</span>
+              <span className="block mt-2 pl-4">Price Counting Daily, means the VIP only count if you editing</span>
+              <span className="block mt-2 pl-8">Eg: if you pay on Jan 1, 2026, but the whole year edit SeeLayer 100 days,</span>
+              <span className="block mt-2 pl-8">from Jan 1, 2027, your VIP have 265 days</span>
             </p>
           </div>
 
@@ -489,21 +555,21 @@ const Home = () => {
               >
                 <div className="relative h-64 overflow-hidden">
                   <img
-                    src={feature.image}
+                    // src={feature.image}
                     alt={feature.title}
-                    className="w-full h-full object-cover hover:scale-110 transition-transform duration-500"
+                    className="bg-[#cccccc] w-full h-full object-cover hover:scale-110 transition-transform duration-500"
                   />
                 </div>
                 <div className="p-6 text-center">
                   <h3 className="text-2xl font-bold text-gray-900 mb-2">
-                    {feature.title}
+                  {feature.subtitle}
                   </h3>
-                  <p className="text-lg text-blue-600 font-semibold mb-4">
+                  {/* <p className="text-lg text-blue-600 font-semibold mb-4">
                     {feature.subtitle}
                   </p>
                   <p className="text-gray-600 leading-relaxed">
                     {feature.description}
-                  </p>
+                  </p> */}
                 </div>
               </div>
             ))}

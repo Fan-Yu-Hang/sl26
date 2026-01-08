@@ -57,7 +57,7 @@ export function useQuery<T = any>(table: string, options?: {
         const { data, error } = await query
 
         if (error) throw error
-        setData(data || [])
+        setData((data as T[]) || [])
         setError(null)
       } catch (err) {
         setError(err as Error)

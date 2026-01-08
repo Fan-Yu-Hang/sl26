@@ -44,9 +44,10 @@ const Nav = () => {
   }
 
   const navLinks = [
-    { to: '/', label: '我们是谁', isHash: false },
-    { href: '#main', label: '文档/案例', isHash: true },
-    { href: '#features2', label: '花多少钱？', isHash: true },
+    { to: '/', label: 'Why SeeLayer?', isHash: false },
+    { href: '#main', label: 'Have a try', isHash: true },
+    { href: '#features2', label: 'Price', isHash: true },
+    { href: '#footer', label: 'About us', isHash: true },
   ]
 
   return (
@@ -114,17 +115,17 @@ const Nav = () => {
               ) : (
                 <SignInButton mode="modal">
                   <button className="text-gray-700 hover:text-blue-600 font-medium transition-colors duration-200 whitespace-nowrap text-xs xl:text-sm cursor-pointer">
-                    <span className="block">虎符校验</span>
-                    <span className="block text-gray-500 text-xs">注册登录</span>
+                    <span className="block">Tiger Token</span>
+                    <span className="block text-gray-500 text-xs">Sign in/Sign up</span>
                   </button>
                 </SignInButton>
               )}
-              <button 
+              {/* <button 
                 onClick={handleDownloadClick}
                 className="px-4 xl:px-6 py-2 bg-blue-600 text-white rounded-full font-semibold hover:bg-blue-700 transition-all duration-300 shadow-md hover:shadow-lg whitespace-nowrap text-sm xl:text-base"
               >
                 开启透明之旅
-              </button>
+              </button> */}
             </div>
 
             {/* Mobile Menu Button */}

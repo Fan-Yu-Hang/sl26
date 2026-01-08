@@ -52,15 +52,15 @@
   
   @media (min-width: 1024px) {
     .rotating-text {
-      width: 4ch;
-      min-width: 4ch;
+      width: 6.5ch;
+      min-width: 6ch;
     }
   }
   
   @media (min-width: 1280px) {
     .rotating-text {
-      width: 4ch;
-      min-width: 4ch;
+      width: 6.5ch;
+      min-width: 6ch;
     }
   }
 

@@ -6,18 +6,39 @@ interface Mark {
     y: number
 }
 
+interface ImageBoxProps {
+    initialImageSrc?: string
+    initialTitle?: string
+    initialMarks?: Mark[]
+    initialTextStore?: Map<number, string> | Record<number, string>
+}
+
 const MAX_FILE_SIZE = 10 * 1024 * 1024 // 10MB
 const ALLOWED_TYPES = ['image/png', 'image/jpeg', 'image/jpg', 'image/webp']
 
-const ImageBox = () => {
+const ImageBox = ({ 
+    initialImageSrc = '', 
+    initialTitle = '', 
+    initialMarks = [],
+    initialTextStore
+}: ImageBoxProps = {}) => {
     // 状态管理
-    const [imageSrc, setImageSrc] = useState<string>('')
-    const [marks, setMarks] = useState<Mark[]>([])
+    const [imageSrc, setImageSrc] = useState<string>(initialImageSrc)
+    const [marks, setMarks] = useState<Mark[]>(initialMarks)
     const [selectedMarkId, setSelectedMarkId] = useState<number | null>(null)
     const [userScale, setUserScale] = useState(1)
     const [adjustMode, setAdjustMode] = useState(false)
     const [sliderLocked, setSliderLocked] = useState(true)
-    const [textStore, setTextStore] = useState<Map<number, string>>(new Map())
+    const [textStore, setTextStore] = useState<Map<number, string>>(() => {
+        if (initialTextStore) {
+            if (initialTextStore instanceof Map) {
+                return new Map(initialTextStore)
+            } else {
+                return new Map(Object.entries(initialTextStore).map(([k, v]) => [Number(k), v]))
+            }
+        }
+        return new Map()
+    })
     const [currentTextId, setCurrentTextId] = useState<number | null>(null)
     const [status, setStatus] = useState<{ text: string; type: 'info' | 'success' | 'error'; visible: boolean }>({
         text: '',
@@ -26,6 +47,7 @@ const ImageBox = () => {
     })
     const [popoverMarkId, setPopoverMarkId] = useState<number | null>(null)
     const [popoverPosition, setPopoverPosition] = useState<{ left: number; top: number } | null>(null)
+    const [title, setTitle] = useState<string>(initialTitle)
 
     // Refs
     const fileInputRef = useRef<HTMLInputElement>(null)
@@ -60,6 +82,14 @@ const ImageBox = () => {
   const frameRequestedRef = useRef(false)
   const longPressTimerRef = useRef<Map<number, number>>(new Map())
 
+  // 初始化：根据传入的初始值设置 nextIdRef
+  useEffect(() => {
+    if (initialMarks.length > 0) {
+      const maxId = Math.max(...initialMarks.map(m => m.id))
+      nextIdRef.current = maxId + 1
+    }
+  }, []) // 只在组件挂载时执行一次
+
     // 工具函数：显示状态提示
     const showStatus = (text: string, type: 'info' | 'success' | 'error' = 'info') => {
         setStatus({ text, type, visible: true })
@@ -74,25 +104,25 @@ const ImageBox = () => {
     if (!file) return
 
     if (!ALLOWED_TYPES.includes(file.type)) {
-      showStatus('不支持的图片格式', 'error')
+      showStatus('Unsupported image format', 'error')
       if (fileInputRef.current) fileInputRef.current.value = ''
       return
     }
 
     if (file.size > MAX_FILE_SIZE) {
-      showStatus('图片文件过大（＜10MB）', 'error')
+      showStatus('Oversized < 10MB', 'error')
       if (fileInputRef.current) fileInputRef.current.value = ''
       return
     }
 
-    showStatus('加载中…', 'info')
+    showStatus('Loading...', 'info')
     const reader = new FileReader()
     reader.onload = () => {
       const result = reader.result as string
       setImageSrc(result)
     }
     reader.onerror = () => {
-      showStatus('上传失败', 'error')
+      showStatus('Upload failed', 'error')
       if (fileInputRef.current) fileInputRef.current.value = ''
     }
     reader.readAsDataURL(file)
@@ -145,7 +175,7 @@ const ImageBox = () => {
       // 保留已有的标记点，不清空
       // setMarks([]) - 已移除，保留标记点
       // nextIdRef.current = 1 - 已移除，保留当前ID序列
-      showStatus('上传成功', 'success')
+      showStatus('Uploaded', 'success')
       if (overlayRef.current) {
         overlayRef.current.style.pointerEvents = 'none'
       }
@@ -262,7 +292,7 @@ const ImageBox = () => {
 
     const handleSliderMouseDown = (e: React.MouseEvent<HTMLDivElement>) => {
         if (sliderLocked) {
-            showStatus('请点击"调整图片"按钮启用调整模式', 'info')
+            showStatus('Click Adjust', 'info')
             return
         }
         e.preventDefault()
@@ -411,7 +441,7 @@ const ImageBox = () => {
                 e.preventDefault()
                 e.stopPropagation()
                 if (sliderLocked) {
-                    showStatus('请点击"调整图片"按钮启用调整模式', 'info')
+                    showStatus('Click Adjust', 'info')
                     return
                 }
                 isPinchingRef.current = true
@@ -471,9 +501,9 @@ const ImageBox = () => {
 
         const handleWheel = (e: WheelEvent) => {
             if (!imageSrc || sliderLocked) {
-                if (sliderLocked) {
-                    showStatus('请点击"调整图片"按钮启用调整模式', 'info')
-                }
+            if (sliderLocked) {
+                showStatus('Click Adjust', 'info')
+            }
                 return
             }
             e.preventDefault()
@@ -518,11 +548,11 @@ const ImageBox = () => {
     const handleDoubleClick = (e: React.MouseEvent<HTMLDivElement>) => {
         // 只有在锁定状态下才能新增序号
         if (adjustMode) {
-            showStatus('请先切换到锁定状态才能添加标记点', 'info')
+            showStatus('Click LOCK', 'info')
             return
         }
         if (!imageBoxRef.current || marks.length >= 8) {
-            showStatus('数量已达上限', 'error')
+            showStatus('Maximum number', 'error')
             return
         }
         const rect = imageBoxRef.current.getBoundingClientRect()
@@ -572,7 +602,7 @@ const ImageBox = () => {
     const showDeletePopover = (markId: number, markX: number, markY: number) => {
         // 只有在锁定状态下才能删除序号
         if (adjustMode) {
-            showStatus('请先切换到锁定状态才能删除标记点', 'info')
+            showStatus('Click LOCK', 'info')
             return
         }
         setPopoverMarkId(markId)
@@ -689,7 +719,7 @@ const ImageBox = () => {
         tyRef.current = 0
         setAdjustMode(false)
         setSliderLocked(true)
-        showStatus('已清除图片，标记点已保留', 'success')
+        showStatus('Deleted', 'success')
     }
 
     // localStorage 存储和加载
@@ -765,6 +795,15 @@ const ImageBox = () => {
                         />
                     </div>
 
+                    {/* Title 输入框 */}
+                    <input
+                        type="text"
+                        value={title}
+                        onChange={(e) => setTitle(e.target.value)}
+                        placeholder="Enter title..."
+                        className="w-full md:w-[500px] h-[40px] px-3 py-1 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent mb-2"
+                    />
+
                     {/* 图片框 */}
                     <div
                         ref={imageBoxRef}
@@ -779,7 +818,7 @@ const ImageBox = () => {
                         {/* 提示文字（无图片时显示） */}
                         {!imageSrc && (
                                     <div className="absolute inset-0 flex items-center justify-center bg-gray-50/55 backdrop-blur-sm text-gray-600 text-sm user-select-none pointer-events-none z-0">
-                                上传图片 &lt; 10MB（PNG / JPG / JPEG / WebP）
+                                Click Add to Upload Image &lt; 10MB (PNG / JPG / JPEG / WebP)
                             </div>
                         )}
 
@@ -903,7 +942,7 @@ const ImageBox = () => {
                                         handleDeleteMark(popoverMarkId)
                                     }}
                                 >
-                                    删除
+                                    Delete
                                 </button>
                             </div>
                         )}
@@ -939,26 +978,28 @@ const ImageBox = () => {
                                 }`}
                             onClick={handleAdjustToggle}
                         >
-                            {adjustMode ? '调整图片' : '锁定状态'}
+                            {adjustMode ? 'Adjust' : 'LOCK'}
                         </button>
-                        <button
-                            className="px-4 py-2 rounded text-sm font-medium bg-white text-green-600 border border-green-600 hover:bg-green-50 transition-colors"
-                            onClick={() => fileInputRef.current?.click()}
-                        >
-                            新增/替换
-                        </button>
-                        <button
-                            className="px-4 py-2 rounded text-sm font-medium bg-white text-red-600 border border-red-600 hover:bg-red-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                            onClick={handleDelete}
-                            disabled={!imageSrc}
-                        >
-                            删除
-                        </button>
+                        <div className="flex gap-2">
+                            <button
+                                className="px-4 py-2 rounded text-sm font-medium bg-white text-red-600 border border-red-600 hover:bg-red-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                                onClick={handleDelete}
+                                disabled={!imageSrc}
+                            >
+                                Delete
+                            </button>
+                            <button
+                                className="px-4 py-2 rounded text-sm font-medium bg-white text-green-600 border border-green-600 hover:bg-green-50 transition-colors"
+                                onClick={() => fileInputRef.current?.click()}
+                            >
+                                Add/Replace
+                            </button>
+                        </div>
                     </div>
                 </div>
 
                 {/* 右侧：文字面板和序列条 */}
-                <div className="flex gap-5 flex-1 w-full md:w-auto mt-4 md:mt-0 relative">
+                <div className="flex gap-5 flex-1 w-full md:w-auto relative md:mt-[48px]">
                     <div
                         ref={textPanelRef}
                         className="min-w-0"
@@ -969,8 +1010,8 @@ const ImageBox = () => {
                             placeholder={currentTextId ? (() => {
                                 const markIndex = marks.findIndex(m => m.id === currentTextId)
                                 const displayIndex = markIndex >= 0 ? markIndex + 1 : currentTextId
-                                return `输入标记 ${displayIndex} 的文字说明...`
-                            })() : '选择一个标记点来输入文字说明'}
+                                return `Type text for label ${displayIndex}...`
+                            })() : 'Select a label to type text'}
                             value={currentTextId ? (textStore.get(currentTextId) || '') : ''}
                             onChange={(e) => {
                                 if (currentTextId) {

@@ -1,123 +1,84 @@
 const Footer = () => {
-  const footerLinks = [
-    {
-      title: 'To B——让软件开发没有难做的生意',
-      href: 'https://ndpcdq918n.feishu.cn/docx/ZvR4dyTa5oJiuVx8chLcf2sAnYd',
-    },
-    {
-      title: 'To C——图片、地图动态标注',
-      href: 'https://ndpcdq918n.feishu.cn/docx/OqgYduWgBopQVPxagZMcQFJKn0d',
-    },
-    {
-      title: '关于我们——透见SeeLayer',
-      href: 'https://ndpcdq918n.feishu.cn/docx/TR89dcBeToSB2hxRsoxckhzsnjg',
-    },
-  ]
-
-  const downloads = [
-    {
-      name: 'Mac',
-      href: 'https://seelayer.oss-cn-beijing.aliyuncs.com/updates/SeeLayer-Mac-Installer.dmg',
-    },
-    {
-      name: 'Win',
-      href: 'https://seelayer.oss-cn-beijing.aliyuncs.com/updates/SeeLayer-Windows-Setup.exe',
-    },
-  ]
-
-  const socialLinks = [
-    {
-      name: '小红书',
-      image: '/images/xhs.jpg',
-      href: 'https://www.xiaohongshu.com/user/profile/5a60a57111be1037f5aee4a1?xsec_token=YBasSrG6grAhtYWapyR--Y6gVnb3MsmUMovGQhFfBtxvE=&xsec_source=app_share&xhsshare=CopyLink&appuid=607fbeb7000000000100b873&apptime=1749662523&share_id=49037dad9bb346f4aced542ae47dcad3',
-    },
-    {
-      name: 'Bilibili',
-      image: '/images/bi.jpg',
-      href: 'https://space.bilibili.com/363820921/upload/video',
-    },
-  ]
-
   return (
-    <footer className="text-gray-300" style={{ backgroundColor: '#EFEFE9' }}>
+    <footer className="text-gray-900" style={{ backgroundColor: '#EFEFE9' }} id="footer">
       <div className="container mx-auto px-4 py-16">
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-12 mb-12">
-          {/* Documentation Links */}
-          <div>
-            <div className="mb-6">
-              <img
-                src="/images/feishu.png"
-                alt="Feishu"
-                className="h-12 w-auto object-contain"
-              />
-            </div>
-            <ul className="space-y-4">
-              {footerLinks.map((link, index) => (
-                <li key={index}>
-                  <a
-                    href={link.href}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-gray-600 hover:text-gray-900 transition-colors duration-200 block py-2"
-                  >
-                    {link.title}
-                  </a>
-                </li>
-              ))}
-            </ul>
-          </div>
+        {/* About SeeLayer's Team Section */}
+        <div className="max-w-4xl mx-auto mb-12">
+          <h2 className="text-4xl md:text-5xl font-bold text-center mb-8">
+            About SeeLayer's Team
+          </h2>
+          
+          <p className="text-lg md:text-xl text-left mb-8">
+            Our team has 5 members, we graduated from Hongkong Baptist University and Tsinghua University, welcome to join, and welcome to invest this start-up~
+          </p>
 
-          {/* Downloads */}
-          <div id="download" className="scroll-mt-20">
-            <div className="mb-6">
-              <img
-                src="/images/logo.png"
-                alt="Logo"
-                className="h-12 w-auto object-contain"
-              />
-            </div>
-            <ul className="space-y-4">
-              {downloads.map((download, index) => (
-                <li key={index}>
-                  <a
-                    href={download.href}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-gray-600 hover:text-gray-900 transition-colors duration-200 block py-2 font-semibold"
-                  >
-                    {download.name}
-                  </a>
-                </li>
-              ))}
-            </ul>
-          </div>
-
-          {/* Social Links */}
-          <div>
-            <h3 className="text-gray-900 font-semibold mb-6">关注我们</h3>
-            <div className="flex space-x-4">
-              {socialLinks.map((social, index) => (
-                <a
-                  key={index}
-                  href={social.href}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="hover:opacity-80 transition-opacity duration-200"
-                >
-                  <img
-                    src={social.image}
-                    alt={social.name}
-                    className="h-10 w-10 rounded-full object-cover"
-                  />
-                </a>
-              ))}
-            </div>
-          </div>
+          {/* Team Members List */}
+          <ul className="space-y-4 text-left mb-12">
+            <li className="text-lg md:text-xl">
+              1-5 Mr.Fan, PM (CEO) <span className="text-gray-500">Hongkong Baptist University</span>
+            </li>
+            <li className="text-lg md:text-xl">
+              2-5 Mr.Qian, front-end
+            </li>
+            <li className="text-lg md:text-xl">
+              3-5 Mr.Guo, back-end
+            </li>
+            <li className="text-lg md:text-xl">
+              4-5 Dr.He, gamification designer <span className="text-gray-500">Tsinghua University</span>
+            </li>
+            <li className="text-lg md:text-xl">
+              5-5 Mr.Wang, graphic designer <span className="text-gray-500">Tsinghua University</span>
+            </li>
+          </ul>
         </div>
 
-        <div className="border-t border-gray-300 pt-8">
-          <div className="flex flex-col md:flex-row justify-between items-center text-sm text-gray-600">
-            <p>&copy; {new Date().getFullYear()} Seelayer. All rights reserved.</p>
+        {/* Bottom Section */}
+        <div className="border-t border-gray-300 pt-[200px]">
+          <div className="flex flex-col md:flex-row justify-between items-center gap-4 relative">
+            {/* Company Name - Bottom Left */}
+            <p className="text-sm md:text-base text-gray-700">
+              HangZhou ProtonFly IoT Inc.
+            </p>
+
+            {/* Social Media Links - Bottom Center */}
+            <div className="flex gap-[54px] items-center absolute left-0 right-0 bottom-0 top-0 m-auto px-[64px] py-[44px] w-max bg-[#CCCCCC] rounded-[45px]">
+              <a
+                href="https://x.com/SeeLayer"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="w-12 h-12  rounded-lg flex items-center justify-center transition-colors"
+                aria-label="X (Twitter)"
+              >
+               <img src="/images/x.png" alt="" />
+              </a>
+              <a
+                href="https://www.youtube.com/@SeeLayer2024"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="w-12 h-12  rounded-lg flex items-center justify-center transition-colors"
+                aria-label="YouTube"
+              >
+               <img src="/images/youtube.png" alt="" />
+              </a>
+              <a
+                href="https://www.xiaohongshu.com/user/profile/5a60a57111be1037f5aee4a1?xsec_token=ABPBDMvdTOBXC8MsXST824t-aF7UFIQY92MKJCG2ETT14%3D&xsec_source=pc_search"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="w-12 h-12  rounded-lg flex items-center justify-center transition-colors"
+                aria-label="小红书"
+              >
+                <img src="/images/xhs.png" alt="" />
+              </a>
+              <a
+                href="https://space.bilibili.com/363820921?spm_id_from=333.337.0.0"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="w-12 h-12  rounded-lg flex items-center justify-center transition-colors"
+                aria-label="bilibili"
+              >
+                <img src="/images/bi.png" alt="" />
+              </a>
+            </div>
           </div>
         </div>
       </div>
