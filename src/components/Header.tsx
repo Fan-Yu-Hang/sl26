@@ -66,7 +66,7 @@ const Header = ({ showHero = false }: HeaderProps) => {
                   <li className="text-lg md:text-xl font-medium text-gray-900 text-start">
                     2-3 Label the intro
                   </li>
-                  <li className="text-lg md:text-xl font-medium text-gray-900 text-start">
+                  <li className="text-lg md:text-xl font-medium text-[#999999] text-start">
                     3-3 Add Al voice (waitlist...)
                   </li>
                 </ul>

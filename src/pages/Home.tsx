@@ -251,7 +251,9 @@ const Home = () => {
         <div className="container mx-auto px-4">
           <div className="text-center mb-16">
             <h2 ref={featuresTitleRef} className="text-4xl md:text-5xl font-bold text-gray-900 mb-4 opacity-0">
-            Making a tutorial video takes too much time o(╥﹏╥)o
+            Making a tutorial video
+            <br />
+            takes too much time o(╥﹏╥)o
             </h2>
             <p className="text-xl text-gray-600 max-w-3xl mx-auto">
             SeeLayer can save you from repeated work
