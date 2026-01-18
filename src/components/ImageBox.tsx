@@ -1011,7 +1011,7 @@ const ImageBox = ({
                                 const markIndex = marks.findIndex(m => m.id === currentTextId)
                                 const displayIndex = markIndex >= 0 ? markIndex + 1 : currentTextId
                                 return `Type text for label ${displayIndex}...`
-                            })() : 'Select a label to type text'}
+                            })() : 'Double click the image area after click left-botton Adjust'}
                             value={currentTextId ? (textStore.get(currentTextId) || '') : ''}
                             onChange={(e) => {
                                 if (currentTextId) {
