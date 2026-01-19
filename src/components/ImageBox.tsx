@@ -83,17 +83,17 @@ const ImageBox = ({
     const tyRef = useRef(0) // translate y
     const nextIdRef = useRef(1)
     const boxIndexRef = useRef(0)
-    const isInitializingRef = useRef(false) // 标记是否正在初始化图片
+    const userScaleRef = useRef(1) // 用于避免闭包问题
+    const adjustModeRef = useRef(false) // 用于避免闭包问题
+    const sliderLockedRef = useRef(true) // 用于避免闭包问题
+    const justLoadedRef = useRef(false) // 防止加载后立即被 applyTransform 覆盖
 
   // 拖拽状态
   const isDraggingRef = useRef(false)
   const isPanningRef = useRef(false)
   const isMarkDraggingRef = useRef(false)
-  const isPinchingRef = useRef(false)
   const lastXRef = useRef(0)
   const lastYRef = useRef(0)
-  const lastDistanceRef = useRef(0)
-  const lastScaleRef = useRef(1)
   const frameRequestedRef = useRef(false)
   const longPressTimerRef = useRef<Map<number, number>>(new Map())
 
@@ -148,6 +148,7 @@ const ImageBox = ({
       if (uploadError) {
         console.error('Supabase upload error:', uploadError)
         showStatus('Upload failed (check Storage policy)', 'error')
+        // 上传失败，保留本地预览
         return
       }
 
@@ -158,173 +159,152 @@ const ImageBox = ({
       const publicUrl = publicData?.publicUrl
       if (!publicUrl) {
         showStatus('Uploaded, but no public URL', 'error')
+        // 没有 public URL，保留本地预览
         return
       }
 
-      setImageSrc(publicUrl)
+      // 只有当 URL 不同时才更新（避免重复加载）
+      // 实际上本地预览已经够用，Supabase URL 主要用于持久化
+      // 这里静默替换 URL，不触发重新居中
+      if (imageRef.current && imageRef.current.src !== publicUrl) {
+        // 直接替换 src，不通过 setState 避免重新初始化
+        imageRef.current.src = publicUrl
+      }
       showStatus('Uploaded', 'success')
     } catch (err: any) {
       console.error('Upload failed:', err)
       showStatus('Upload failed', 'error')
     } finally {
-      // 清理本地预览 URL
-      try {
-        URL.revokeObjectURL(localUrl)
-      } catch {}
+      // 清理本地预览 URL（延迟清理，确保图片已加载）
+      setTimeout(() => {
+        try {
+          URL.revokeObjectURL(localUrl)
+        } catch {}
+      }, 1000)
       if (fileInputRef.current) fileInputRef.current.value = ''
     }
   }
 
-  // 图片加载完成处理（参考 index2.html 的逻辑）
+  // 图片加载完成处理 - 简化版本
   useEffect(() => {
     const img = imageRef.current
-    if (!img || !imageSrc) return
+    const box = imageBoxRef.current
+    if (!img || !box || !imageSrc) return
 
     const handleLoad = () => {
-      if (!img.naturalWidth || !img.naturalHeight) return
+      const nw = img.naturalWidth
+      const nh = img.naturalHeight
+      if (!nw || !nh) return
       
-      // 标记正在初始化，避免 useEffect 中的 updateTransform 覆盖居中位置
-      isInitializingRef.current = true
+      // 保存尺寸
+      nwRef.current = nw
+      nhRef.current = nh
       
-      // 先设置图片尺寸（参考 index2.html 第497-498行）
-      nwRef.current = img.naturalWidth
-      nhRef.current = img.naturalHeight
-
-      if (!imageBoxRef.current) {
-        isInitializingRef.current = false
-        return
-      }
-      const rect = imageBoxRef.current.getBoundingClientRect()
+      // 获取容器尺寸
+      const rect = box.getBoundingClientRect()
       const cw = rect.width
       const ch = rect.height
-
-      // 计算基础缩放（参考 index2.html 第501行）
-      baseScaleRef.current = Math.min(cw / nwRef.current, ch / nhRef.current)
       
-      // 重置状态（参考 index2.html 第502-503行）
+      // 计算缩放比例使图片适应容器
+      const scale = Math.min(cw / nw, ch / nh)
+      baseScaleRef.current = scale
+      
+      // 重置偏移
       txRef.current = 0
       tyRef.current = 0
+      userScaleRef.current = 1
       
-      // 计算居中位置（参考 index2.html 第504-507行）
-      const sw = nwRef.current * baseScaleRef.current
-      const sh = nhRef.current * baseScaleRef.current
-      const centerTx = (cw - sw) / 2
-      const centerTy = (ch - sh) / 2
-
-      // 直接设置 transform（参考 index2.html 第508行），不调用 updateTransform
-      img.style.transform = `translate3d(${centerTx}px, ${centerTy}px, 0) scale(${baseScaleRef.current})`
+      // 计算居中位置
+      const sw = nw * scale
+      const sh = nh * scale
+      const x = (cw - sw) / 2
+      const y = (ch - sh) / 2
       
-      // 更新滑条和状态（参考 index2.html 第509-516行）
-      updateSliderByScale()
-      setUserScale(1) // 在设置完 transform 后再更新 state
-      setAdjustMode(true)
-      setSliderLocked(false)
-      // 保留已有的标记点，不清空
-      // setMarks([]) - 已移除，保留标记点
-      // nextIdRef.current = 1 - 已移除，保留当前ID序列
-      showStatus('Uploaded', 'success')
-      if (overlayRef.current) {
-        overlayRef.current.style.pointerEvents = 'none'
-      }
+      // 直接设置 transform 居中显示（参考 index2.html 第508行）
+      img.style.transition = 'none'
+      img.style.transform = `translate(${x}px, ${y}px) scale(${scale})`
       
-      // 初始化完成，允许后续的 updateTransform 调用
-      setTimeout(() => {
-        isInitializingRef.current = false
-      }, 100)
+      // 设置标志，防止 useEffect 中的 applyTransform 覆盖居中位置
+      justLoadedRef.current = true
+      
+      // 延迟恢复 transition 和更新状态
+      requestAnimationFrame(() => {
+        img.style.transition = 'transform 300ms ease-out'
+        setUserScale(1)
+        setAdjustMode(true)
+        setSliderLocked(false)
+        if (overlayRef.current) {
+          overlayRef.current.style.pointerEvents = 'none'
+        }
+        showStatus('Uploaded', 'success')
+        
+        // 下一帧后清除标志
+        requestAnimationFrame(() => {
+          justLoadedRef.current = false
+        })
+      })
     }
 
-    // 如果图片已经加载完成
-    if (img.complete && img.naturalWidth > 0 && img.naturalHeight > 0) {
-      // 使用 requestAnimationFrame 确保 DOM 已更新（参考 index2.html）
-      requestAnimationFrame(() => {
-        requestAnimationFrame(handleLoad)
-      })
+    // 监听加载事件
+    if (img.complete && img.naturalWidth > 0) {
+      handleLoad()
     } else {
-      img.addEventListener('load', handleLoad)
-      return () => img.removeEventListener('load', handleLoad)
+      img.onload = handleLoad
+      return () => { img.onload = null }
     }
   }, [imageSrc])
 
-    // 更新滑条位置
-    const updateSliderByScale = () => {
-        if (!sliderRef.current || !knobRef.current) return
-        const trackHeight = 160
-        const knobHeight = 16
-        const min = 1
-        const max = 3
-        const t = (userScale - min) / (max - min)
-        const y = (1 - t) * (trackHeight - knobHeight) + knobHeight / 2
-        knobRef.current.style.top = `${y}px`
-    }
-
-    // 更新图片变换
-    const updateTransform = () => {
-        if (!imageBoxRef.current || !imageRef.current || !imageSrc) return
-
-        const rect = imageBoxRef.current.getBoundingClientRect()
+    // 应用图片变换（统一函数）
+    const applyTransform = (scale?: number) => {
+        const img = imageRef.current
+        const box = imageBoxRef.current
+        if (!img || !box || !imageSrc || !nwRef.current) return
+        
+        const currentScale = scale ?? (baseScaleRef.current * userScaleRef.current)
+        const rect = box.getBoundingClientRect()
         const cw = rect.width
         const ch = rect.height
-        const scale = baseScaleRef.current * userScale
-        const sw = nwRef.current * scale
-        const sh = nhRef.current * scale
-        const centerTx = (cw - sw) / 2
-        const centerTy = (ch - sh) / 2
-        const finalX = centerTx + txRef.current
-        const finalY = centerTy + tyRef.current
-
-        imageRef.current.style.transform = `translate3d(${finalX}px, ${finalY}px, 0) scale(${scale})`
-        applyClampedTransform()
-    }
-
-    // 应用边界限制的变换
-    const applyClampedTransform = () => {
-        if (!imageBoxRef.current || !imageRef.current || !imageSrc) return
-
-        const rect = imageBoxRef.current.getBoundingClientRect()
-        const cw = rect.width
-        const ch = rect.height
-        const scale = baseScaleRef.current * userScale
-        const sw = nwRef.current * scale
-        const sh = nhRef.current * scale
-        const centerTx = (cw - sw) / 2
-        const centerTy = (ch - sh) / 2
-
+        const sw = nwRef.current * currentScale
+        const sh = nhRef.current * currentScale
+        
+        // 计算居中位置
+        const centerX = (cw - sw) / 2
+        const centerY = (ch - sh) / 2
+        
+        // 应用边界限制
+        let finalX = centerX + txRef.current
+        let finalY = centerY + tyRef.current
+        
         const buffer = 12
-        let minX, maxX, minY, maxY
         if (sw <= cw) {
-            minX = maxX = centerTx
+            finalX = centerX
+            txRef.current = 0
         } else {
-            minX = cw - sw - buffer
-            maxX = buffer
+            finalX = Math.max(cw - sw - buffer, Math.min(buffer, finalX))
+            txRef.current = finalX - centerX
         }
         if (sh <= ch) {
-            minY = maxY = centerTy
+            finalY = centerY
+            tyRef.current = 0
         } else {
-            minY = ch - sh - buffer
-            maxY = buffer
+            finalY = Math.max(ch - sh - buffer, Math.min(buffer, finalY))
+            tyRef.current = finalY - centerY
         }
-
-        let finalX = centerTx + txRef.current
-        let finalY = centerTy + tyRef.current
-        finalX = Math.max(minX, Math.min(maxX, finalX))
-        finalY = Math.max(minY, Math.min(maxY, finalY))
-        txRef.current = finalX - centerTx
-        tyRef.current = finalY - centerTy
-
-        if (imageRef.current) {
-            imageRef.current.style.transform = `translate(${finalX}px, ${finalY}px) scale(${scale})`
-        }
+        
+        img.style.transform = `translate(${finalX}px, ${finalY}px) scale(${currentScale})`
     }
 
-    // 当 userScale 改变时更新变换（图片加载时由 handleLoad 处理，这里不重复调用）
+    // 同步 ref 值，避免闭包问题
     useEffect(() => {
-        // 如果正在初始化，不调用 updateTransform，避免覆盖居中位置
-        if (isInitializingRef.current) return
-        if (imageSrc && nwRef.current > 0 && nhRef.current > 0) {
-            updateTransform()
-            updateSliderByScale()
+        userScaleRef.current = userScale
+        adjustModeRef.current = adjustMode
+        sliderLockedRef.current = sliderLocked
+        // 如果刚加载完图片，不调用 applyTransform，避免覆盖居中位置
+        if (justLoadedRef.current) return
+        if (imageSrc && nwRef.current > 0) {
+            applyTransform()
         }
-    }, [userScale])
+    }, [userScale, adjustMode, sliderLocked, imageSrc])
 
     // 缩放滑条处理
     const scaleFromPos = (y: number) => {
@@ -379,167 +359,98 @@ const ImageBox = ({
         window.addEventListener('mouseup', handleMouseUp)
     }
 
-    // 图片平移处理
-    // 计算两点之间的距离
-    const getDistance = (touch1: { clientX: number; clientY: number }, touch2: { clientX: number; clientY: number }) => {
-        const dx = touch1.clientX - touch2.clientX
-        const dy = touch1.clientY - touch2.clientY
-        return Math.sqrt(dx * dx + dy * dy)
-    }
-
-    const handlePanStart = (e: React.MouseEvent) => {
-        if (!imageSrc) return
-        
-        // 鼠标：平移操作
-        if (!adjustMode && userScale <= 1) return
-        isPanningRef.current = true
-        isPinchingRef.current = false
-        lastXRef.current = e.clientX
-        lastYRef.current = e.clientY
-        if (imageBoxRef.current) {
-            imageBoxRef.current.style.cursor = 'grabbing'
-        }
-    }
-
-    const handlePanMove = (e: MouseEvent | TouchEvent) => {
-        // 双指缩放
-        if ('touches' in e && e.touches.length === 2 && isPinchingRef.current) {
-            // 立即阻止默认行为，防止页面缩放（特别是放大时）
-            e.preventDefault()
-            e.stopPropagation()
-            if (!imageBoxRef.current || sliderLocked) return
-            
-            const distance = getDistance(e.touches[0], e.touches[1])
-            const scaleChange = distance / lastDistanceRef.current
-            let newScale = lastScaleRef.current * scaleChange
-            
-            const min = 1
-            const max = 3
-            newScale = Math.max(min, Math.min(max, Number(newScale.toFixed(2))))
-            
-            if (newScale !== userScale) {
-                const rect = imageBoxRef.current.getBoundingClientRect()
-                const centerX = (e.touches[0].clientX + e.touches[1].clientX) / 2 - rect.left
-                const centerY = (e.touches[0].clientY + e.touches[1].clientY) / 2 - rect.top
-                
-                const prevScale = baseScaleRef.current * userScale
-                const newScaleValue = baseScaleRef.current * newScale
-                
-                const centerTx = (rect.width - nwRef.current * prevScale) / 2
-                const centerTy = (rect.height - nhRef.current * prevScale) / 2
-                const imgX = (centerX - centerTx - txRef.current) / prevScale
-                const imgY = (centerY - centerTy - tyRef.current) / prevScale
-                
-                txRef.current += imgX * (prevScale - newScaleValue)
-                tyRef.current += imgY * (prevScale - newScaleValue)
-                
-                if (newScale === 1) {
-                    txRef.current = 0
-                    tyRef.current = 0
-                }
-                
-                setUserScale(newScale)
-            }
-            return
-        }
-        
-        // 单指平移
-        if (!isPanningRef.current) return
-        const clientX = 'touches' in e ? e.touches[0].clientX : e.clientX
-        const clientY = 'touches' in e ? e.touches[0].clientY : e.clientY
-        const dx = clientX - lastXRef.current
-        const dy = clientY - lastYRef.current
-        lastXRef.current = clientX
-        lastYRef.current = clientY
-        txRef.current += dx
-        tyRef.current += dy
-
-        if (!frameRequestedRef.current) {
-            frameRequestedRef.current = true
-            requestAnimationFrame(() => {
-                applyClampedTransform()
-                frameRequestedRef.current = false
-            })
-        }
-    }
-
-    const handlePanEnd = () => {
-        isPanningRef.current = false
-        isPinchingRef.current = false
-        lastDistanceRef.current = 0
-        if (imageBoxRef.current) {
-            imageBoxRef.current.style.cursor = adjustMode ? 'grab' : 'pointer'
-        }
-    }
-
+    // 图片平移和缩放处理 - 参考 index2.html 的简单模式
+    // 只绑定一次事件监听器，使用 ref 存储所有状态
     useEffect(() => {
         const viewport = viewportRef.current
-        if (!viewport) return
+        const box = imageBoxRef.current
+        if (!viewport || !box) return
 
-        const handleMouseMove = (e: MouseEvent) => handlePanMove(e)
-        const handleMouseUp = () => handlePanEnd()
-        
-        // 触摸开始：检测双指操作（参考 index2.html，但添加双指缩放支持）
-        const handleTouchStart = (e: TouchEvent) => {
-            if (!imageSrc) return
-            
-            // 双指操作：阻止默认行为并开始缩放
-            if (e.touches.length === 2) {
-                e.preventDefault()
-                e.stopPropagation()
-                if (sliderLocked) {
-                    showStatus('Click Adjust', 'info')
-                    return
-                }
-                isPinchingRef.current = true
-                isPanningRef.current = false
-                const distance = getDistance(e.touches[0], e.touches[1])
-                lastDistanceRef.current = distance
-                lastScaleRef.current = userScale
-            } else if (e.touches.length === 1) {
-                // 单指操作：平移（参考 index2.html）
-                if (!adjustMode && userScale <= 1) return
-                isPanningRef.current = true
-                isPinchingRef.current = false
-                const t = e.touches[0]
-                lastXRef.current = t.clientX
-                lastYRef.current = t.clientY
-                if (imageBoxRef.current) {
-                    imageBoxRef.current.style.cursor = 'grabbing'
-                }
+        // 鼠标按下
+        const onMouseDown = (e: MouseEvent) => {
+            if (!imageRef.current?.src) return
+            // 检查是否可以平移（调整模式 或 已放大）
+            if (!adjustModeRef.current && userScaleRef.current <= 1) return
+            isPanningRef.current = true
+            lastXRef.current = e.clientX
+            lastYRef.current = e.clientY
+            box.style.cursor = 'grabbing'
+        }
+
+        // 鼠标移动
+        const onMouseMove = (e: MouseEvent) => {
+            if (!isPanningRef.current) return
+            const dx = e.clientX - lastXRef.current
+            const dy = e.clientY - lastYRef.current
+            lastXRef.current = e.clientX
+            lastYRef.current = e.clientY
+            txRef.current += dx
+            tyRef.current += dy
+            if (!frameRequestedRef.current) {
+                frameRequestedRef.current = true
+                requestAnimationFrame(() => {
+                    applyTransform()
+                    frameRequestedRef.current = false
+                })
             }
         }
-        
-        // 触摸移动：双指时阻止默认行为，单指时不阻止（参考 index2.html）
-        const handleTouchMove = (e: TouchEvent) => {
-            // 双指操作时阻止默认行为（防止页面缩放）
-            if (e.touches.length === 2 || isPinchingRef.current) {
-                e.preventDefault()
-                e.stopPropagation()
-            }
-            handlePanMove(e)
-        }
-        
-        const handleTouchEnd = () => handlePanEnd()
 
-        viewport.addEventListener('mousemove', handleMouseMove)
-        window.addEventListener('mouseup', handleMouseUp)
-        // touchstart 使用 passive: false，因为需要检测双指并调用 preventDefault
-        viewport.addEventListener('touchstart', handleTouchStart, { passive: false })
-        // touchmove 使用 passive: false，因为双指时需要调用 preventDefault
-        viewport.addEventListener('touchmove', handleTouchMove, { passive: false })
-        viewport.addEventListener('touchend', handleTouchEnd, { passive: true })
-        viewport.addEventListener('touchcancel', handleTouchEnd, { passive: true })
+        // 鼠标松开
+        const onMouseUp = () => {
+            isPanningRef.current = false
+            box.style.cursor = 'pointer'
+        }
+
+        // 触摸开始 - 参考 index2.html，只处理单指平移
+        const onTouchStart = (e: TouchEvent) => {
+            if (!imageRef.current?.src) return
+            const t = e.touches[0]
+            isPanningRef.current = true
+            lastXRef.current = t.clientX
+            lastYRef.current = t.clientY
+        }
+
+        // 触摸移动 - 参考 index2.html
+        const onTouchMove = (e: TouchEvent) => {
+            if (!isPanningRef.current) return
+            const t = e.touches[0]
+            const dx = t.clientX - lastXRef.current
+            const dy = t.clientY - lastYRef.current
+            lastXRef.current = t.clientX
+            lastYRef.current = t.clientY
+            txRef.current += dx
+            tyRef.current += dy
+            if (!frameRequestedRef.current) {
+                frameRequestedRef.current = true
+                requestAnimationFrame(() => {
+                    applyTransform()
+                    frameRequestedRef.current = false
+                })
+            }
+        }
+
+        // 触摸结束
+        const onTouchEnd = () => {
+            isPanningRef.current = false
+        }
+
+        // 绑定事件 - 参考 index2.html，触摸使用 passive: true
+        viewport.addEventListener('mousedown', onMouseDown)
+        window.addEventListener('mousemove', onMouseMove)
+        window.addEventListener('mouseup', onMouseUp)
+        viewport.addEventListener('touchstart', onTouchStart, { passive: true })
+        viewport.addEventListener('touchmove', onTouchMove, { passive: true })
+        viewport.addEventListener('touchend', onTouchEnd, { passive: true })
 
         return () => {
-            viewport.removeEventListener('mousemove', handleMouseMove)
-            window.removeEventListener('mouseup', handleMouseUp)
-            viewport.removeEventListener('touchstart', handleTouchStart)
-            viewport.removeEventListener('touchmove', handleTouchMove)
-            viewport.removeEventListener('touchend', handleTouchEnd)
-            viewport.removeEventListener('touchcancel', handleTouchEnd)
+            viewport.removeEventListener('mousedown', onMouseDown)
+            window.removeEventListener('mousemove', onMouseMove)
+            window.removeEventListener('mouseup', onMouseUp)
+            viewport.removeEventListener('touchstart', onTouchStart)
+            viewport.removeEventListener('touchmove', onTouchMove)
+            viewport.removeEventListener('touchend', onTouchEnd)
         }
-    }, [adjustMode, userScale, imageSrc, sliderLocked])
+    }, []) // 空依赖数组，只绑定一次
 
     // 鼠标滚轮缩放（使用原生事件监听器，参考 index2.html）
     useEffect(() => {
@@ -547,10 +458,11 @@ const ImageBox = ({
         if (!imageBox) return
 
         const handleWheel = (e: WheelEvent) => {
-            if (!imageSrc || sliderLocked) {
-            if (sliderLocked) {
-                showStatus('Click Adjust', 'info')
-            }
+            // 使用 ref 检查状态，避免闭包问题
+            if (!imageRef.current?.src || sliderLockedRef.current) {
+                if (sliderLockedRef.current) {
+                    showStatus('Click Adjust', 'info')
+                }
                 return
             }
             e.preventDefault()
@@ -559,37 +471,41 @@ const ImageBox = ({
             const rect = imageBox.getBoundingClientRect()
             const px = e.clientX - rect.left
             const py = e.clientY - rect.top
-            const prevUserScale = userScale
-            const prevScale = baseScaleRef.current * prevUserScale
-            const min = 1
-            const max = 3
-            let nextUserScale = prevUserScale + (-e.deltaY) * 0.001 * (max - min)
-            nextUserScale = Math.max(min, Math.min(max, Number(nextUserScale.toFixed(2))))
-            if (nextUserScale === prevUserScale) return
-            if (nextUserScale === 1) {
-                txRef.current = 0
-                tyRef.current = 0
-            }
-
-            const newScale = baseScaleRef.current * nextUserScale
-            const centerTx = (rect.width - nwRef.current * prevScale) / 2
-            const centerTy = (rect.height - nhRef.current * prevScale) / 2
-            const imgX = (px - centerTx - txRef.current) / prevScale
-            const imgY = (py - centerTy - tyRef.current) / prevScale
-            txRef.current += imgX * (prevScale - newScale)
-            tyRef.current += imgY * (prevScale - newScale)
-            setUserScale(nextUserScale)
-            updateSliderByScale()
-            updateTransform()
+            
+            // 使用函数式更新避免依赖 userScale
+            setUserScale(prevUserScale => {
+                const prevScale = baseScaleRef.current * prevUserScale
+                const min = 1
+                const max = 3
+                let nextUserScale = prevUserScale + (-e.deltaY) * 0.001 * (max - min)
+                nextUserScale = Math.max(min, Math.min(max, Number(nextUserScale.toFixed(2))))
+                
+                if (nextUserScale === prevUserScale) return prevUserScale
+                
+                if (nextUserScale === 1) {
+                    txRef.current = 0
+                    tyRef.current = 0
+                } else {
+                    const newScale = baseScaleRef.current * nextUserScale
+                    const centerTx = (rect.width - nwRef.current * prevScale) / 2
+                    const centerTy = (rect.height - nhRef.current * prevScale) / 2
+                    const imgX = (px - centerTx - txRef.current) / prevScale
+                    const imgY = (py - centerTy - tyRef.current) / prevScale
+                    txRef.current += imgX * (prevScale - newScale)
+                    tyRef.current += imgY * (prevScale - newScale)
+                }
+                
+                return nextUserScale
+            })
         }
 
-        // 使用 passive: false 确保可以调用 preventDefault（参考 index2.html）
+        // 使用 passive: false 确保可以调用 preventDefault
         imageBox.addEventListener('wheel', handleWheel, { passive: false })
 
         return () => {
             imageBox.removeEventListener('wheel', handleWheel)
         }
-    }, [imageSrc, sliderLocked, userScale])
+    }, []) // 空依赖数组，只绑定一次
 
     // 双击添加标记点
     const handleDoubleClick = (e: React.MouseEvent<HTMLDivElement>) => {
@@ -802,7 +718,7 @@ const ImageBox = ({
 
 
     return (
-        <div className="w-[820px] h-[362px] relative flex flex-col items-center w-full">
+        <div className="w-full max-w-[820px] relative flex flex-col items-center">
             {/* 主容器：图片框 + 文字面板和序列条 */}
             <div className="flex flex-col md:flex-row gap-6 items-start w-full">
                 {/* 左侧：缩放滑条 + 图片框 */}
@@ -869,18 +785,15 @@ const ImageBox = ({
                             </div>
                         )}
 
-                        {/* Viewport - 使用 grid 布局，参考 index2.html */}
+                        {/* Viewport - 参考 index2.html，不使用 CSS 居中，完全靠 transform 控制位置 */}
                         <div
                             ref={viewportRef}
                             className="absolute inset-0 pointer-events-auto"
                             style={{
-                                display: 'grid',
-                                placeItems: 'center',
                                 willChange: 'transform',
                                 background: 'transparent',
                                 zIndex: 1
                             }}
-                            onMouseDown={imageSrc ? handlePanStart : undefined}
                         >
                             {imageSrc && (
                                 <img
@@ -889,6 +802,9 @@ const ImageBox = ({
                                     alt=""
                                     className="max-w-none max-h-none select-none pointer-events-auto"
                                     style={{
+                                        position: 'absolute',
+                                        top: 0,
+                                        left: 0,
                                         transformOrigin: 'top left',
                                         transition: 'transform 380ms cubic-bezier(0.22, 1, 0.36, 1)',
                                         willChange: 'transform',
