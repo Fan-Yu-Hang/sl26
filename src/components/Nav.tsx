@@ -53,13 +53,13 @@ const Nav = () => {
   return (
     <>
       <nav
-        className={`fixed top-0 left-0 right-0 z-50 transition-all duration-300 max-w-full overflow-x-hidden ${
+        className={`fixed top-0 left-0 right-0 z-50 transition-all duration-300 max-w-full ${
           isScrolled
             ? 'bg-white/95 backdrop-blur-md shadow-lg'
             : 'bg-transparent'
         }`}
       >
-        <div className="container mx-auto px-4 max-w-full">
+        <div className="container mx-auto px-4 lg:px-[60px] max-w-full">
           <div className="flex items-center justify-between h-20 min-w-0">
             {/* Logo */}
             <Link to="/" className="flex items-center space-x-2 flex-shrink-0">
@@ -114,17 +114,19 @@ const Nav = () => {
                 </div>
               ) : (
                 <SignInButton mode="modal">
-                  <button className="text-gray-700 hover:text-blue-600 font-medium transition-colors duration-200 whitespace-nowrap text-xs xl:text-sm cursor-pointer">
+                  <button className="relative text-gray-700 hover:text-blue-600 font-medium transition-colors duration-200 whitespace-nowrap text-xs xl:text-sm cursor-pointer">
                     <span className="block">Tiger Token</span>
                     <span className="block text-gray-500 text-xs">Sign in/Sign up</span>
+                    <img src="/tigertoken.png" alt="Tiger Token" className="w-[104px] h-[48px] absolute top-[40px] right-[-10px] z-10 rotate-45" />
                   </button>
+                  
                 </SignInButton>
               )}
               {/* <button 
                 onClick={handleDownloadClick}
                 className="px-4 xl:px-6 py-2 bg-blue-600 text-white rounded-full font-semibold hover:bg-blue-700 transition-all duration-300 shadow-md hover:shadow-lg whitespace-nowrap text-sm xl:text-base"
               >
-                开启透明之旅
+                Start Your Journey
               </button> */}
             </div>
 
@@ -200,7 +202,7 @@ const Nav = () => {
                 ) : (
                   <SignInButton mode="modal">
                     <button className="w-full px-6 py-3 bg-blue-600 text-white rounded-full font-semibold hover:bg-blue-700 transition-colors">
-                      注册登录
+                      Sign in / Sign up
                     </button>
                   </SignInButton>
                 )}
@@ -208,7 +210,7 @@ const Nav = () => {
                   onClick={handleDownloadClick}
                   className="w-full px-6 py-3 bg-blue-600 text-white rounded-full font-semibold hover:bg-blue-700 transition-colors"
                 >
-                  开启透明之旅
+                  Start Your Journey
                 </button>
               </div>
             </div>
