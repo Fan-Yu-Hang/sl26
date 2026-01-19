@@ -214,6 +214,14 @@ const ImageBox = ({
 
       setImageSrc(publicUrl)
       setUploadedPath(path)
+      // 关键：上传成功后立刻持久化（避免线上某些场景 useEffect 未触发/被覆盖）
+      try {
+        const key = `imageStore-${boxIndexRef.current}`
+        localStorage.setItem(key, JSON.stringify({ url: publicUrl, path }))
+        console.log('[ImageBox] persisted image to localStorage:', key)
+      } catch (e) {
+        console.error('[ImageBox] Failed to persist image store:', e)
+      }
       showStatus('Uploaded', 'success')
     } catch (err: any) {
       console.error('Upload failed:', err)
