@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect } from 'react'
+import { supabase } from '@/lib/supabase'
 
 interface Mark {
     id: number
@@ -15,6 +16,20 @@ interface ImageBoxProps {
 
 const MAX_FILE_SIZE = 10 * 1024 * 1024 // 10MB
 const ALLOWED_TYPES = ['image/png', 'image/jpeg', 'image/jpg', 'image/webp']
+const SUPABASE_BUCKET = 'SL_images'
+
+function getExtFromFile(file: File) {
+  const fromName = file.name.split('.').pop()?.toLowerCase()
+  if (fromName) return fromName
+  const fromType = file.type.split('/').pop()?.toLowerCase()
+  return fromType || 'png'
+}
+
+function makeStoragePath(file: File) {
+  const ext = getExtFromFile(file)
+  const id = typeof crypto !== 'undefined' && 'randomUUID' in crypto ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(16).slice(2)}`
+  return `uploads/${new Date().toISOString().slice(0, 10)}/${id}.${ext}`
+}
 
 const ImageBox = ({ 
     initialImageSrc = '', 
@@ -98,8 +113,8 @@ const ImageBox = ({
         }, 1800)
     }
 
-  // 文件上传处理
-  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  // 文件上传处理：上传到 Supabase Storage (bucket: SL_images)
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (!file) return
 
@@ -115,17 +130,49 @@ const ImageBox = ({
       return
     }
 
-    showStatus('Loading...', 'info')
-    const reader = new FileReader()
-    reader.onload = () => {
-      const result = reader.result as string
-      setImageSrc(result)
-    }
-    reader.onerror = () => {
+    // 先本地预览，提升体验
+    const localUrl = URL.createObjectURL(file)
+    setImageSrc(localUrl)
+    showStatus('Uploading...', 'info')
+
+    try {
+      const path = makeStoragePath(file)
+      const { error: uploadError } = await supabase.storage
+        .from(SUPABASE_BUCKET)
+        .upload(path, file, {
+          cacheControl: '3600',
+          upsert: true,
+          contentType: file.type,
+        })
+
+      if (uploadError) {
+        console.error('Supabase upload error:', uploadError)
+        showStatus('Upload failed (check Storage policy)', 'error')
+        return
+      }
+
+      const { data: publicData } = supabase.storage
+        .from(SUPABASE_BUCKET)
+        .getPublicUrl(path)
+
+      const publicUrl = publicData?.publicUrl
+      if (!publicUrl) {
+        showStatus('Uploaded, but no public URL', 'error')
+        return
+      }
+
+      setImageSrc(publicUrl)
+      showStatus('Uploaded', 'success')
+    } catch (err: any) {
+      console.error('Upload failed:', err)
       showStatus('Upload failed', 'error')
+    } finally {
+      // 清理本地预览 URL
+      try {
+        URL.revokeObjectURL(localUrl)
+      } catch {}
       if (fileInputRef.current) fileInputRef.current.value = ''
     }
-    reader.readAsDataURL(file)
   }
 
   // 图片加载完成处理（参考 index2.html 的逻辑）
