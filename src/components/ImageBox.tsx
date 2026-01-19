@@ -16,7 +16,16 @@ interface ImageBoxProps {
 
 const MAX_FILE_SIZE = 10 * 1024 * 1024 // 10MB
 const ALLOWED_TYPES = ['image/png', 'image/jpeg', 'image/jpg', 'image/webp']
+// Supabase Storage bucket 名称，需要和 Supabase 控制台中一致
+// 如果上传失败提示 "Bucket not found"，请检查 Supabase Dashboard → Storage → Buckets 里的实际名称
 const SUPABASE_BUCKET = 'SL_images'
+
+function formatSupabaseErrorMessage(err: any) {
+  const msg = (err?.message || err?.error_description || err?.error || '').toString().trim()
+  if (!msg) return 'Unknown error'
+  // 避免 toast 太长
+  return msg.length > 120 ? `${msg.slice(0, 117)}...` : msg
+}
 
 function getExtFromFile(file: File) {
   const fromName = file.name.split('.').pop()?.toLowerCase()
@@ -39,6 +48,7 @@ const ImageBox = ({
 }: ImageBoxProps = {}) => {
     // 状态管理
     const [imageSrc, setImageSrc] = useState<string>(initialImageSrc)
+    const [uploadedPath, setUploadedPath] = useState<string>('')
     const [marks, setMarks] = useState<Mark[]>(initialMarks)
     const [selectedMarkId, setSelectedMarkId] = useState<number | null>(null)
     const [userScale, setUserScale] = useState(1)
@@ -105,6 +115,39 @@ const ImageBox = ({
     }
   }, []) // 只在组件挂载时执行一次
 
+  // 图片持久化（刷新不丢）：把 Storage public URL + path 存到 localStorage
+  useEffect(() => {
+    // 如果外部传了 initialImageSrc，则优先使用外部值；仅在没有初始图片时从本地恢复
+    if (initialImageSrc) return
+    const key = `imageStore-${boxIndexRef.current}`
+    try {
+      const stored = localStorage.getItem(key)
+      if (!stored) return
+      const obj = JSON.parse(stored) as { url?: string; path?: string }
+      if (obj?.url) setImageSrc(obj.url)
+      if (obj?.path) setUploadedPath(obj.path)
+    } catch (e) {
+      console.error('Failed to load image store:', e)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  useEffect(() => {
+    const key = `imageStore-${boxIndexRef.current}`
+    try {
+      if (!imageSrc) {
+        localStorage.removeItem(key)
+        return
+      }
+      // 只持久化线上可访问的 URL（避免保存 blob: 或 base64）
+      const isHttp = /^https?:\/\//i.test(imageSrc)
+      if (!isHttp) return
+      localStorage.setItem(key, JSON.stringify({ url: imageSrc, path: uploadedPath }))
+    } catch (e) {
+      console.error('Failed to save image store:', e)
+    }
+  }, [imageSrc, uploadedPath])
+
     // 工具函数：显示状态提示
     const showStatus = (text: string, type: 'info' | 'success' | 'error' = 'info') => {
         setStatus({ text, type, visible: true })
@@ -147,7 +190,15 @@ const ImageBox = ({
 
       if (uploadError) {
         console.error('Supabase upload error:', uploadError)
-        showStatus('Upload failed (check Storage policy)', 'error')
+        const statusCode = (uploadError as any)?.statusCode
+        const status = (uploadError as any)?.status
+        const hint =
+          statusCode === '404' || status === 404
+            ? `Bucket "${SUPABASE_BUCKET}" not found`
+            : statusCode === '403' || status === 403
+              ? 'Permission denied (Storage policy/RLS)'
+              : formatSupabaseErrorMessage(uploadError)
+        showStatus(`Upload failed: ${hint}`, 'error')
         return
       }
 
@@ -162,6 +213,7 @@ const ImageBox = ({
       }
 
       setImageSrc(publicUrl)
+      setUploadedPath(path)
       showStatus('Uploaded', 'success')
     } catch (err: any) {
       console.error('Upload failed:', err)
@@ -755,6 +807,7 @@ const ImageBox = ({
             imageRef.current.style.transform = ''
         }
         setImageSrc('')
+        setUploadedPath('')
         // 保留标记点和文字，不清空
         // setMarks([]) - 已移除，保留标记点
         // setTextStore(new Map()) - 已移除，保留文字
@@ -766,6 +819,14 @@ const ImageBox = ({
         tyRef.current = 0
         setAdjustMode(false)
         setSliderLocked(true)
+        // 清除本地持久化（刷新后也不再出现）
+        try {
+            const key = `imageStore-${boxIndexRef.current}`
+            localStorage.removeItem(key)
+        } catch (e) {
+            console.error('Failed to clear image store:', e)
+        }
+        
         showStatus('Deleted', 'success')
     }
 
@@ -895,8 +956,8 @@ const ImageBox = ({
                                         backfaceVisibility: 'hidden',
                                         WebkitUserSelect: 'none',
                                         userSelect: 'none',
-                                        WebkitUserDrag: 'none',
-                                        userDrag: 'none',
+                                        // react CSSProperties typings 不包含这些非标准字段，这里用 any 兼容
+                                        ...( { WebkitUserDrag: 'none', userDrag: 'none' } as any ),
                                     }}
                                 />
                             )}
