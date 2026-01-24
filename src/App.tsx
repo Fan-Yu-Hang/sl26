@@ -1,6 +1,8 @@
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom'
 import { ClerkProvider } from '@clerk/clerk-react'
 import Home from './pages/Home'
+import ImageBoxPage from './pages/ImageBoxPage'
+import Dashboard from './pages/Dashboard'
 import { useClerkSupabaseSync } from './hooks/useClerkSupabaseSync'
 
 // 从环境变量获取 Clerk Publishable Key
@@ -20,6 +22,8 @@ function AppContent() {
       <Router>
         <Routes>
           <Route path="/" element={<Home />} />
+          <Route path="/imagebox" element={<ImageBoxPage />} />
+          <Route path="/dashboard" element={<Dashboard />} />
         </Routes>
       </Router>
     </div>

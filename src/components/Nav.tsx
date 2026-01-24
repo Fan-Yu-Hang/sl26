@@ -97,7 +97,13 @@ const Nav = () => {
                 )
               )}
               {isSignedIn ? (
-                <div className="flex items-center space-x-2">
+                <div className="flex items-center space-x-3">
+                  <Link
+                    to="/dashboard"
+                    className="px-4 py-2 bg-green-500 text-white rounded-lg font-medium hover:bg-green-600 transition-colors text-sm"
+                  >
+                    Dashboard
+                  </Link>
                   <UserButton 
                     appearance={{
                       elements: {
@@ -185,19 +191,28 @@ const Nav = () => {
               )}
               <div className="w-full mt-4 space-y-3">
                 {isSignedIn ? (
-                  <div className="flex items-center justify-center space-x-2 py-2">
-                    <UserButton 
-                      appearance={{
-                        elements: {
-                          avatarBox: "w-8 h-8",
-                        }
-                      }}
-                    />
-                    {user && (
-                      <span className="text-gray-700 text-sm">
-                        {user.firstName || user.emailAddresses[0]?.emailAddress}
-                      </span>
-                    )}
+                  <div className="space-y-3">
+                    <Link
+                      to="/dashboard"
+                      onClick={toggleMobileMenu}
+                      className="block w-full px-6 py-3 bg-green-500 text-white rounded-full font-semibold hover:bg-green-600 transition-colors text-center"
+                    >
+                      Dashboard
+                    </Link>
+                    <div className="flex items-center justify-center space-x-2 py-2">
+                      <UserButton 
+                        appearance={{
+                          elements: {
+                            avatarBox: "w-8 h-8",
+                          }
+                        }}
+                      />
+                      {user && (
+                        <span className="text-gray-700 text-sm">
+                          {user.firstName || user.emailAddresses[0]?.emailAddress}
+                        </span>
+                      )}
+                    </div>
                   </div>
                 ) : (
                   <SignInButton mode="modal">
