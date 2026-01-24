@@ -2,6 +2,8 @@ import { useEffect, useRef, useState } from 'react'
 import Header from '../components/Header'
 import Footer from '../components/Footer'
 import ImageBox from '../components/ImageBox'
+import { useClerkSupabase } from '../hooks/useClerkSupabase'
+import { useUser } from '@clerk/clerk-react'
 import { 
   scrollFadeInUp, 
   staggerFadeInUp, 
@@ -26,6 +28,43 @@ const Home = () => {
   const numberRefs = useRef<HTMLSpanElement[]>([])
   const [currentSlide, setCurrentSlide] = useState(1) // 默认显示中间的（索引1，对应第2个）
   const [windowWidth, setWindowWidth] = useState(typeof window !== 'undefined' ? window.innerWidth : 1200)
+  
+  // Supabase Tasks Integration
+  const [tasks, setTasks] = useState<any[]>([])
+  const [taskName, setTaskName] = useState('')
+  const [tasksLoading, setTasksLoading] = useState(false)
+  const { user } = useUser()
+  const supabaseClient = useClerkSupabase()
+
+  // Load tasks
+  useEffect(() => {
+    if (!user) return
+    
+    async function loadTasks() {
+      setTasksLoading(true)
+      const { data, error } = await supabaseClient.from('tasks').select('*').order('created_at', { ascending: false })
+      if (!error) setTasks(data || [])
+      setTasksLoading(false)
+    }
+
+    loadTasks()
+  }, [user, supabaseClient])
+
+  // Create task
+  async function createTask(e: React.FormEvent) {
+    e.preventDefault()
+    if (!taskName.trim()) return
+
+    const { data, error } = await supabaseClient
+      .from('tasks')
+      .insert([{ name: taskName, user_id: user?.id }])
+      .select()
+
+    if (!error && data) {
+      setTasks([data[0], ...tasks])
+      setTaskName('')
+    }
+  }
 
   // ImageBox 初始配置数据
   const imageBoxConfigs = [
@@ -297,6 +336,48 @@ const Home = () => {
           <h2 className="text-4xl md:text-5xl font-bold text-gray-900 mb-6 text-center">
             Have a try
           </h2>
+          
+          {/* Supabase Task Demo */}
+          {user && (
+            <div className="max-w-md mx-auto mb-12 p-6 bg-gray-50 rounded-xl shadow-sm border border-gray-100">
+              <h3 className="text-xl font-bold mb-4 text-gray-800">Your Tasks (Supabase + Clerk)</h3>
+              
+              <form onSubmit={createTask} className="flex gap-2 mb-6">
+                <input
+                  type="text"
+                  value={taskName}
+                  onChange={(e) => setTaskName(e.target.value)}
+                  placeholder="Enter a new task..."
+                  className="flex-1 px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+                <button 
+                  type="submit"
+                  disabled={!taskName.trim()}
+                  className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  Add
+                </button>
+              </form>
+
+              <div className="space-y-2 max-h-60 overflow-y-auto">
+                {tasksLoading ? (
+                  <p className="text-gray-500 text-center py-4">Loading tasks...</p>
+                ) : tasks.length > 0 ? (
+                  tasks.map((task) => (
+                    <div key={task.id} className="p-3 bg-white rounded-lg shadow-sm border border-gray-100 flex justify-between items-center">
+                      <span className="text-gray-700">{task.name}</span>
+                      <span className="text-xs text-gray-400">
+                        {new Date(task.created_at).toLocaleDateString()}
+                      </span>
+                    </div>
+                  ))
+                ) : (
+                  <p className="text-gray-400 text-center py-4">No tasks yet. Add one above!</p>
+                )}
+              </div>
+            </div>
+          )}
+
           <div className="max-w-3xl mx-auto">
             <ul className="space-y-3 text-left text-lg md:text-lg text-gray-900">
               <li>- Click Add, upload an image, adjust the image, zoom in or drag</li>
