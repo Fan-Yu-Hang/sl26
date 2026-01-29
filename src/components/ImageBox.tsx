@@ -1,5 +1,6 @@
-import { useState, useRef, useEffect } from 'react'
-import { supabase } from '@/lib/supabase'
+import { useState, useRef, useEffect, forwardRef, useImperativeHandle } from 'react'
+import { useClerkSupabase } from '@/hooks/useClerkSupabase'
+import { useUser } from '@clerk/clerk-react'
 
 interface Mark {
     id: number
@@ -12,6 +13,7 @@ interface ImageBoxProps {
     initialTitle?: string
     initialMarks?: Mark[]
     initialTextStore?: Map<number, string> | Record<number, string>
+    id?: string
 }
 
 const MAX_FILE_SIZE = 10 * 1024 * 1024 // 10MB
@@ -40,15 +42,21 @@ function makeStoragePath(file: File) {
   return `uploads/${new Date().toISOString().slice(0, 10)}/${id}.${ext}`
 }
 
-const ImageBox = ({ 
+export interface ImageBoxHandle {
+    save: () => Promise<boolean>;
+}
+
+const ImageBox = forwardRef<ImageBoxHandle, ImageBoxProps>(({ 
     initialImageSrc = '', 
     initialTitle = '', 
     initialMarks = [],
-    initialTextStore
-}: ImageBoxProps = {}) => {
+    initialTextStore,
+    id
+}: ImageBoxProps = {}, ref) => {
     // 状态管理
+    const supabase = useClerkSupabase()
+    const { user: clerkUser } = useUser()
     const [imageSrc, setImageSrc] = useState<string>(initialImageSrc)
-    const [uploadedPath, setUploadedPath] = useState<string>('')
     const [marks, setMarks] = useState<Mark[]>(initialMarks)
     const [selectedMarkId, setSelectedMarkId] = useState<number | null>(null)
     const [userScale, setUserScale] = useState(1)
@@ -92,7 +100,6 @@ const ImageBox = ({
     const txRef = useRef(0) // translate x
     const tyRef = useRef(0) // translate y
     const nextIdRef = useRef(1)
-    const boxIndexRef = useRef(0)
     const userScaleRef = useRef(1) // 用于避免闭包问题
     const adjustModeRef = useRef(false) // 用于避免闭包问题
     const sliderLockedRef = useRef(true) // 用于避免闭包问题
@@ -115,38 +122,6 @@ const ImageBox = ({
     }
   }, []) // 只在组件挂载时执行一次
 
-  // 图片持久化（刷新不丢）：把 Storage public URL + path 存到 localStorage
-  useEffect(() => {
-    // 如果外部传了 initialImageSrc，则优先使用外部值；仅在没有初始图片时从本地恢复
-    if (initialImageSrc) return
-    const key = `imageStore-${boxIndexRef.current}`
-    try {
-      const stored = localStorage.getItem(key)
-      if (!stored) return
-      const obj = JSON.parse(stored) as { url?: string; path?: string }
-      if (obj?.url) setImageSrc(obj.url)
-      if (obj?.path) setUploadedPath(obj.path)
-    } catch (e) {
-      console.error('Failed to load image store:', e)
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
-
-  useEffect(() => {
-    const key = `imageStore-${boxIndexRef.current}`
-    try {
-      if (!imageSrc) {
-        localStorage.removeItem(key)
-        return
-      }
-      // 只持久化线上可访问的 URL（避免保存 blob: 或 base64）
-      const isHttp = /^https?:\/\//i.test(imageSrc)
-      if (!isHttp) return
-      localStorage.setItem(key, JSON.stringify({ url: imageSrc, path: uploadedPath }))
-    } catch (e) {
-      console.error('Failed to save image store:', e)
-    }
-  }, [imageSrc, uploadedPath])
 
     // 工具函数：显示状态提示
     const showStatus = (text: string, type: 'info' | 'success' | 'error' = 'info') => {
@@ -213,15 +188,6 @@ const ImageBox = ({
       }
 
       setImageSrc(publicUrl)
-      setUploadedPath(path)
-      // 关键：上传成功后立刻持久化（避免线上某些场景 useEffect 未触发/被覆盖）
-      try {
-        const key = `imageStore-${boxIndexRef.current}`
-        localStorage.setItem(key, JSON.stringify({ url: publicUrl, path }))
-        console.log('[ImageBox] persisted image to localStorage:', key)
-      } catch (e) {
-        console.error('[ImageBox] Failed to persist image store:', e)
-      }
       showStatus('Uploaded', 'success')
     } catch (err: any) {
       console.error('Upload failed:', err)
@@ -723,7 +689,6 @@ const ImageBox = ({
             imageRef.current.style.transform = ''
         }
         setImageSrc('')
-        setUploadedPath('')
         // 保留标记点和文字，不清空
         // setMarks([]) - 已移除，保留标记点
         // setTextStore(new Map()) - 已移除，保留文字
@@ -735,47 +700,75 @@ const ImageBox = ({
         tyRef.current = 0
         setAdjustMode(false)
         setSliderLocked(true)
-        // 清除本地持久化（刷新后也不再出现）
-        try {
-            const key = `imageStore-${boxIndexRef.current}`
-            localStorage.removeItem(key)
-        } catch (e) {
-            console.error('Failed to clear image store:', e)
-        }
         
         showStatus('Deleted', 'success')
     }
 
-    // localStorage 存储和加载
-    useEffect(() => {
-        // const key = `textStore-${boxIndexRef.current}`
-        // try {
-        //     const stored = localStorage.getItem(key)
-        //     if (stored) {
-        //         const obj = JSON.parse(stored)
-        //         const newStore = new Map<number, string>()
-        //         Object.keys(obj).forEach(k => {
-        //             newStore.set(Number(k), obj[k])
-        //         })
-        //         setTextStore(newStore)
-        //     }
-        // } catch (e) {
-        //     console.error('Failed to load text store:', e)
-        // }
-    }, [])
-
-    useEffect(() => {
-        const key = `textStore-${boxIndexRef.current}`
-        try {
-            const obj: Record<string, string> = {}
-            textStore.forEach((v, k) => {
-                obj[k.toString()] = v
-            })
-            localStorage.setItem(key, JSON.stringify(obj))
-        } catch (e) {
-            console.error('Failed to save text store:', e)
+    // 保存到 Supabase
+    const handleSave = async () => {
+        if (!imageSrc) {
+            showStatus('Upload image first', 'error')
+            return false
         }
-    }, [textStore])
+
+        try {
+            showStatus('Saving...', 'info')
+            
+            // 将 Map 转换为对象以便存储为 JSONB
+            const textStoreObj: Record<number, string> = {}
+            textStore.forEach((value, key) => {
+                textStoreObj[key] = value
+            })
+
+            let query = supabase.from('image_boxes')
+            let result;
+
+            if (id) {
+                // 更新现有记录
+                result = await query
+                    .update({
+                        title: title,
+                        image_url: imageSrc,
+                        marks: marks,
+                        text_store: textStoreObj,
+                        user_id: clerkUser?.id
+                    })
+                    .eq('id', parseInt(id))
+            } else {
+                // 插入新记录
+                result = await query.insert([
+                    {
+                        title: title,
+                        image_url: imageSrc,
+                        marks: marks,
+                        text_store: textStoreObj,
+                        user_id: clerkUser?.id
+                    }
+                ])
+            }
+
+            const { error } = result
+
+            if (error) {
+                console.error('Error saving to Supabase:', error)
+                showStatus(formatSupabaseErrorMessage(error), 'error')
+                return false
+            } else {
+                showStatus('Saved successfully', 'success')
+                return true
+            }
+        } catch (err) {
+            console.error('Unexpected error during save:', err)
+            showStatus('Failed to save data', 'error')
+            return false
+        }
+    }
+
+    // 暴露保存方法给外部
+    useImperativeHandle(ref, () => ({
+        save: handleSave
+    }))
+
 
 
     return (
@@ -1071,6 +1064,6 @@ const ImageBox = ({
             </div>
         </div>
     )
-}
+})
 
 export default ImageBox

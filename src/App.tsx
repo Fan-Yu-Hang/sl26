@@ -23,6 +23,7 @@ function AppContent() {
         <Routes>
           <Route path="/" element={<Home />} />
           <Route path="/imagebox" element={<ImageBoxPage />} />
+          <Route path="/imagebox/:id" element={<ImageBoxPage />} />
           <Route path="/dashboard" element={<Dashboard />} />
         </Routes>
       </Router>
