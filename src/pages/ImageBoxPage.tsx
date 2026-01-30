@@ -4,7 +4,7 @@ import ImageBox, { ImageBoxHandle } from '@/components/ImageBox'
 import { useClerkSupabase } from '@/hooks/useClerkSupabase'
 import { useUser } from '@clerk/clerk-react'
 
-/** 详情页从 Table Editor 的 image_boxes 拉取：id + user_id 定位行，title / image_url / marks / text_store 预填图层 */
+/** 详情页公开访问：从 image_boxes 按 id 拉取，所有人（含未登录）可看图片和文字；仅所有者可编辑/发布 */
 const ImageBoxPage = () => {
   const { id } = useParams()
   const imageBoxRef = useRef<ImageBoxHandle>(null)
@@ -15,26 +15,28 @@ const ImageBoxPage = () => {
     title: string;
     marks: any[];
     text_store: Record<string, string>;
+    user_id?: string | null;
   } | null>(null)
   const [loading, setLoading] = useState(!!id)
   const [notFound, setNotFound] = useState(false)
 
+  const isOwner = Boolean(id && user && initialData?.user_id === user.id)
+
   useEffect(() => {
     async function loadData() {
-      if (!isLoaded || !user || !id) {
+      if (!id || !isLoaded) {
         setLoading(false)
-        if (id && isLoaded && !user) setNotFound(false)
         return
       }
 
       try {
         setLoading(true)
         setNotFound(false)
+        // 详情页公开：仅按 id 查询，不限制 user_id，未登录用户也能看到图片和文字
         const { data, error } = await supabase
           .from('image_boxes')
-          .select('id, title, image_url, marks, text_store')
+          .select('id, title, image_url, marks, text_store, user_id')
           .eq('id', id)
-          .eq('user_id', user.id)
           .single()
 
         if (error) {
@@ -46,7 +48,8 @@ const ImageBoxPage = () => {
             image_url: data.image_url ?? '',
             title: data.title ?? '',
             marks: Array.isArray(data.marks) ? data.marks : [],
-            text_store: data.text_store && typeof data.text_store === 'object' ? data.text_store as Record<string, string> : {}
+            text_store: data.text_store && typeof data.text_store === 'object' ? data.text_store as Record<string, string> : {},
+            user_id: data.user_id ?? null
           })
           setNotFound(false)
         } else {
@@ -69,7 +72,7 @@ const ImageBoxPage = () => {
       setNotFound(false)
       setLoading(false)
     }
-  }, [id, isLoaded, user, supabase])
+  }, [id, isLoaded, supabase])
 
   const navigate = useNavigate()
   const [isSaving, setIsSaving] = useState(false)
@@ -143,29 +146,34 @@ const ImageBoxPage = () => {
           </div>
         </div>
 
-        <button
-          onClick={handleSave}
-          disabled={isSaving}
-          className={`px-8 h-12 font-bold rounded-2xl shadow-lg transition-all flex items-center gap-2 active:scale-[0.98] ${
-            isSaving 
-              ? 'bg-gray-100 text-gray-400 cursor-not-allowed shadow-none' 
-              : 'bg-teal-600 text-white hover:bg-teal-700 shadow-teal-100'
-          }`}
-        >
-          {isSaving ? (
-            <>
-              <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
-              Publishing...
-            </>
-          ) : (
-            <>
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-              </svg>
-              Publish Changes
-            </>
-          )}
-        </button>
+        {/** 新建页或当前用户为项目所有者时显示发布按钮；未登录/非所有者仅可查看 */}
+        {(!id || isOwner) ? (
+          <button
+            onClick={handleSave}
+            disabled={isSaving}
+            className={`px-8 h-12 font-bold rounded-2xl shadow-lg transition-all flex items-center gap-2 active:scale-[0.98] ${
+              isSaving 
+                ? 'bg-gray-100 text-gray-400 cursor-not-allowed shadow-none' 
+                : 'bg-teal-600 text-white hover:bg-teal-700 shadow-teal-100'
+            }`}
+          >
+            {isSaving ? (
+              <>
+                <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+                Publishing...
+              </>
+            ) : (
+              <>
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                </svg>
+                Publish Changes
+              </>
+            )}
+          </button>
+        ) : (
+          <p className="text-sm text-gray-500">View only · Sign in as owner to edit</p>
+        )}
       </header>
 
       <main className="py-12 px-4">
