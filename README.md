@@ -1,6 +1,6 @@
 # Seelayer Website - 现代化设计
 
-这是一个基于 React + TypeScript + Tailwind CSS + Vite 构建的现代化网站项目。
+这是一个基于 React + TypeScript + Tailwind CSS + Vite 构建的现代化网站项目
 
 ## ✨ 功能特性
 
