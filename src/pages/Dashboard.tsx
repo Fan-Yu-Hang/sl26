@@ -3,9 +3,10 @@ import { useUser, UserButton } from '@clerk/clerk-react'
 import { useNavigate } from 'react-router-dom'
 import { useClerkSupabase } from '@/hooks/useClerkSupabase'
 
-interface LayerFile {
+/** Dashboard 列表项：来自 Table Editor 的 image_boxes，按 user_id 筛出当前用户的记录，title 列为项目标题 */
+interface DashboardItem {
   id: string
-  name: string
+  title: string
   createdAt: string
   image_url: string
 }
@@ -16,7 +17,7 @@ const Dashboard = () => {
   const supabase = useClerkSupabase()
   const [searchQuery, setSearchQuery] = useState('')
   const [loading, setLoading] = useState(true)
-  const [files, setFiles] = useState<LayerFile[]>([])
+  const [files, setFiles] = useState<DashboardItem[]>([])
   const [deleteId, setDeleteId] = useState<string | null>(null)
   const [activeTab, setActiveTab] = useState('all')
 
@@ -41,6 +42,7 @@ const Dashboard = () => {
       if (!isLoaded || !user) return
       try {
         setLoading(true)
+        // 数据获取：image_boxes 表按 user_id 筛出当前用户的行，title 列作为 dashboard 项目标题
         const { data, error } = await supabase
           .from('image_boxes')
           .select('id, title, image_url, created_at')
@@ -50,9 +52,9 @@ const Dashboard = () => {
         if (error) {
           console.error('Error fetching files:', error)
         } else if (data) {
-          const formattedFiles: LayerFile[] = data.map(item => ({
-            id: item.id.toString(),
-            name: item.title || 'Untitled Project',
+          const formattedFiles: DashboardItem[] = data.map(item => ({
+            id: String(item.id),
+            title: item.title || 'Untitled Project',
             createdAt: new Date(item.created_at).toLocaleDateString('en-US', {
               month: 'short',
               day: 'numeric',
@@ -107,7 +109,7 @@ const Dashboard = () => {
   }
 
   const filteredFiles = files.filter(file =>
-    file.name.toLowerCase().includes(searchQuery.toLowerCase())
+    file.title.toLowerCase().includes(searchQuery.toLowerCase())
   )
 
   return (
@@ -228,7 +230,7 @@ const Dashboard = () => {
                           className="font-bold text-gray-900 truncate hover:text-teal-600 transition-colors cursor-pointer"
                           onClick={() => navigate(`/imagebox/${file.id}`)}
                         >
-                          {file.name}
+                          {file.title}
                         </h3>
                         <div className="flex gap-1">
                           <button

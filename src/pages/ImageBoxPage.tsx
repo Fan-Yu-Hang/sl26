@@ -4,6 +4,7 @@ import ImageBox, { ImageBoxHandle } from '@/components/ImageBox'
 import { useClerkSupabase } from '@/hooks/useClerkSupabase'
 import { useUser } from '@clerk/clerk-react'
 
+/** 详情页从 Table Editor 的 image_boxes 拉取：id + user_id 定位行，title / image_url / marks / text_store 预填图层 */
 const ImageBoxPage = () => {
   const { id } = useParams()
   const imageBoxRef = useRef<ImageBoxHandle>(null)
@@ -13,38 +14,49 @@ const ImageBoxPage = () => {
     image_url: string;
     title: string;
     marks: any[];
-    text_store: Record<number, string>;
+    text_store: Record<string, string>;
   } | null>(null)
-  const [loading, setLoading] = useState(false)
+  const [loading, setLoading] = useState(!!id)
+  const [notFound, setNotFound] = useState(false)
 
   useEffect(() => {
     async function loadData() {
       if (!isLoaded || !user || !id) {
         setLoading(false)
+        if (id && isLoaded && !user) setNotFound(false)
         return
       }
 
       try {
         setLoading(true)
+        setNotFound(false)
         const { data, error } = await supabase
           .from('image_boxes')
-          .select('*')
+          .select('id, title, image_url, marks, text_store')
           .eq('id', id)
           .eq('user_id', user.id)
           .single()
 
         if (error) {
           console.error('Error fetching file:', error)
+          setNotFound(true)
+          setInitialData(null)
         } else if (data) {
           setInitialData({
-            image_url: data.image_url,
-            title: data.title,
-            marks: data.marks || [],
-            text_store: data.text_store || {}
+            image_url: data.image_url ?? '',
+            title: data.title ?? '',
+            marks: Array.isArray(data.marks) ? data.marks : [],
+            text_store: data.text_store && typeof data.text_store === 'object' ? data.text_store as Record<string, string> : {}
           })
+          setNotFound(false)
+        } else {
+          setNotFound(true)
+          setInitialData(null)
         }
       } catch (err) {
         console.error('Failed to load data:', err)
+        setNotFound(true)
+        setInitialData(null)
       } finally {
         setLoading(false)
       }
@@ -54,6 +66,7 @@ const ImageBoxPage = () => {
       loadData()
     } else {
       setInitialData(null)
+      setNotFound(false)
       setLoading(false)
     }
   }, [id, isLoaded, user, supabase])
@@ -77,15 +90,41 @@ const ImageBoxPage = () => {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+      <div className="min-h-screen bg-[#FBFBFC] flex items-center justify-center">
+        <div className="relative">
+          <div className="w-12 h-12 rounded-full border-4 border-gray-100 border-t-teal-500 animate-spin"></div>
+        </div>
       </div>
     )
   }
 
+  if (id && notFound) {
+    return (
+      <div className="min-h-screen bg-[#FBFBFC] flex items-center justify-center p-6">
+        <div className="max-w-md w-full bg-white rounded-3xl shadow-sm border border-gray-100 p-8 text-center">
+          <div className="w-20 h-20 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-6">
+            <svg className="w-10 h-10 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9.172 16.172a4 4 0 015.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+          </div>
+          <h2 className="text-2xl font-bold text-gray-900 mb-2">Project not found</h2>
+          <p className="text-gray-500 mb-8 text-lg">This project does not exist or you don’t have access to it.</p>
+          <button
+            onClick={() => navigate('/dashboard')}
+            className="w-full py-4 bg-teal-600 text-white rounded-2xl font-semibold hover:bg-teal-700 transition-all shadow-lg shadow-teal-100 active:scale-[0.98]"
+          >
+            Back to Dashboard
+          </button>
+        </div>
+      </div>
+    )
+  }
+
+  const pageTitle = id ? (initialData?.title || 'Project Details') : 'Create New Project'
+
   return (
     <div className="min-h-screen bg-[#FBFBFC]">
-      {/* Header Area */}
+      {/* Header：与 Create New Project 一致，详情页显示项目标题 */}
       <header className="h-20 bg-white border-b border-gray-100 flex items-center justify-between px-8 sticky top-0 z-30 backdrop-blur-md bg-white/80">
         <div className="flex items-center gap-4">
           <button 
@@ -97,8 +136,8 @@ const ImageBoxPage = () => {
             </svg>
           </button>
           <div>
-            <h1 className="text-xl font-black text-gray-900 tracking-tight">
-              {id ? 'Edit Project' : 'Create New Project'}
+            <h1 className="text-xl font-black text-gray-900 tracking-tight truncate max-w-[280px]" title={pageTitle}>
+              {pageTitle}
             </h1>
             <p className="text-[10px] uppercase tracking-[0.2em] font-bold text-teal-600">Visual Layer Editor</p>
           </div>
@@ -135,10 +174,10 @@ const ImageBoxPage = () => {
             <ImageBox 
               key={id || 'new'}
               ref={imageBoxRef}
-              initialTitle={initialData?.title || ""}
-              initialImageSrc={initialData?.image_url || ""}
-              initialMarks={initialData?.marks || []}
-              initialTextStore={initialData?.text_store || {}}
+              initialTitle={initialData?.title ?? ''}
+              initialImageSrc={initialData?.image_url ?? ''}
+              initialMarks={initialData?.marks ?? []}
+              initialTextStore={initialData?.text_store ?? {}}
               id={id}
             />
           </div>
