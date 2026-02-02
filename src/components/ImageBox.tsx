@@ -337,7 +337,7 @@ const ImageBox = forwardRef<ImageBoxHandle, ImageBoxProps>(({
 
     const handleSliderMouseDown = (e: React.MouseEvent<HTMLDivElement>) => {
         if (sliderLocked) {
-            showStatus('Click Adjust', 'info')
+            showStatus('Click LOCK', 'info')
             return
         }
         e.preventDefault()

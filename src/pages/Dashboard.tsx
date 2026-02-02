@@ -303,7 +303,7 @@ const Dashboard = () => {
               </div>
               <h3 className="text-2xl font-black text-gray-900 mb-3 tracking-tight">Delete Project?</h3>
               <p className="text-gray-500 mb-8 text-lg leading-relaxed">
-                This will permanently delete the project and all associated layers. This action cannot be undone.
+                Are you sure delete the Layer? Image and texts cannot be undone.
               </p>
               <div className="flex gap-4">
                 <button
