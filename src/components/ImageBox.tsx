@@ -13,6 +13,9 @@ interface ImageBoxProps {
     initialTitle?: string
     initialMarks?: Mark[]
     initialTextStore?: Map<number, string> | Record<number, string>
+    initialUserScale?: number
+    initialTx?: number
+    initialTy?: number
     id?: string
 }
 
@@ -51,6 +54,9 @@ const ImageBox = forwardRef<ImageBoxHandle, ImageBoxProps>(({
     initialTitle = '', 
     initialMarks = [],
     initialTextStore,
+    initialUserScale = 1,
+    initialTx = 0,
+    initialTy = 0,
     id
 }: ImageBoxProps = {}, ref) => {
     // 状态管理
@@ -59,7 +65,7 @@ const ImageBox = forwardRef<ImageBoxHandle, ImageBoxProps>(({
     const [imageSrc, setImageSrc] = useState<string>(initialImageSrc)
     const [marks, setMarks] = useState<Mark[]>(initialMarks)
     const [selectedMarkId, setSelectedMarkId] = useState<number | null>(null)
-    const [userScale, setUserScale] = useState(1)
+    const [userScale, setUserScale] = useState(initialUserScale)
     const [adjustMode, setAdjustMode] = useState(false)
     const [sliderLocked, setSliderLocked] = useState(true)
     const [textStore, setTextStore] = useState<Map<number, string>>(() => {
@@ -97,10 +103,11 @@ const ImageBox = forwardRef<ImageBoxHandle, ImageBoxProps>(({
     const nwRef = useRef(0) // natural width
     const nhRef = useRef(0) // natural height
     const baseScaleRef = useRef(1)
-    const txRef = useRef(0) // translate x
-    const tyRef = useRef(0) // translate y
+    const txRef = useRef(initialTx) // translate x
+    const tyRef = useRef(initialTy) // translate y
     const nextIdRef = useRef(1)
-    const userScaleRef = useRef(1) // 用于避免闭包问题
+    const userScaleRef = useRef(initialUserScale) // 用于避免闭包问题
+    const hasChangedImageRef = useRef(false) // 记录是否切换过图片
     const adjustModeRef = useRef(false) // 用于避免闭包问题
     const sliderLockedRef = useRef(true) // 用于避免闭包问题
     const justLoadedRef = useRef(false) // 防止加载后立即被 applyTransform 覆盖
@@ -113,6 +120,7 @@ const ImageBox = forwardRef<ImageBoxHandle, ImageBoxProps>(({
   const lastYRef = useRef(0)
   const frameRequestedRef = useRef(false)
   const longPressTimerRef = useRef<Map<number, number>>(new Map())
+  const applyTransformRef = useRef<() => void>(() => {})
 
   // 初始化：根据传入的初始值设置 nextIdRef
   useEffect(() => {
@@ -151,6 +159,7 @@ const ImageBox = forwardRef<ImageBoxHandle, ImageBoxProps>(({
     // 先本地预览，提升体验
     const localUrl = URL.createObjectURL(file)
     setImageSrc(localUrl)
+    hasChangedImageRef.current = true
     showStatus('Uploading...', 'info')
 
     try {
@@ -227,28 +236,42 @@ const ImageBox = forwardRef<ImageBoxHandle, ImageBoxProps>(({
       const scale = Math.min(cw / nw, ch / nh)
       baseScaleRef.current = scale
       
-      // 重置偏移
-      txRef.current = 0
-      tyRef.current = 0
-      userScaleRef.current = 1
+      const isInitialImage = imageSrc === initialImageSrc && !hasChangedImageRef.current
+      
+      // 设置或恢复偏移和缩放
+      if (isInitialImage) {
+        txRef.current = initialTx
+        tyRef.current = initialTy
+        userScaleRef.current = initialUserScale
+      } else {
+        txRef.current = 0
+        tyRef.current = 0
+        userScaleRef.current = 1
+      }
+      
+      const currentScale = scale * userScaleRef.current
       
       // 计算居中位置
-      const sw = nw * scale
-      const sh = nh * scale
-      const x = (cw - sw) / 2
-      const y = (ch - sh) / 2
+      const sw = nw * currentScale
+      const sh = nh * currentScale
+      const centerX = (cw - sw) / 2
+      const centerY = (ch - sh) / 2
       
-      // 直接设置 transform 居中显示（参考 index2.html 第508行）
+      // 应用偏移
+      const x = centerX + txRef.current
+      const y = centerY + tyRef.current
+      
+      // 直接设置 transform 居中显示
       img.style.transition = 'none'
-      img.style.transform = `translate(${x}px, ${y}px) scale(${scale})`
+      img.style.transform = `translate(${x}px, ${y}px) scale(${currentScale})`
       
-      // 设置标志，防止 useEffect 中的 applyTransform 覆盖居中位置
+      // 设置标志，防止 useEffect 中的 applyTransform 覆盖位置
       justLoadedRef.current = true
       
       // 延迟恢复 transition 和更新状态
       requestAnimationFrame(() => {
         img.style.transition = 'transform 300ms ease-out'
-        setUserScale(1)
+        setUserScale(userScaleRef.current)
         setAdjustMode(true)
         setSliderLocked(false)
         if (overlayRef.current) {
@@ -273,12 +296,13 @@ const ImageBox = forwardRef<ImageBoxHandle, ImageBoxProps>(({
   }, [imageSrc])
 
     // 应用图片变换（统一函数）
-    const applyTransform = (scale?: number) => {
+    const applyTransform = () => {
         const img = imageRef.current
         const box = imageBoxRef.current
-        if (!img || !box || !imageSrc || !nwRef.current) return
+        // 使用 ref 检查 src，避免 stale closure
+        if (!img || !box || !img.src || !nwRef.current) return
         
-        const currentScale = scale ?? (baseScaleRef.current * userScaleRef.current)
+        const currentScale = baseScaleRef.current * userScaleRef.current
         const rect = box.getBoundingClientRect()
         const cw = rect.width
         const ch = rect.height
@@ -311,6 +335,11 @@ const ImageBox = forwardRef<ImageBoxHandle, ImageBoxProps>(({
         
         img.style.transform = `translate(${finalX}px, ${finalY}px) scale(${currentScale})`
     }
+
+    // 更新 applyTransformRef
+    useEffect(() => {
+        applyTransformRef.current = applyTransform
+    })
 
     // 同步 ref 值，避免闭包问题
     useEffect(() => {
@@ -407,7 +436,7 @@ const ImageBox = forwardRef<ImageBoxHandle, ImageBoxProps>(({
             if (!frameRequestedRef.current) {
                 frameRequestedRef.current = true
                 requestAnimationFrame(() => {
-                    applyTransform()
+                    applyTransformRef.current()
                     frameRequestedRef.current = false
                 })
             }
@@ -441,7 +470,7 @@ const ImageBox = forwardRef<ImageBoxHandle, ImageBoxProps>(({
             if (!frameRequestedRef.current) {
                 frameRequestedRef.current = true
                 requestAnimationFrame(() => {
-                    applyTransform()
+                    applyTransformRef.current()
                     frameRequestedRef.current = false
                 })
             }
@@ -731,7 +760,10 @@ const ImageBox = forwardRef<ImageBoxHandle, ImageBoxProps>(({
                         image_url: imageSrc,
                         marks: marks,
                         text_store: textStoreObj,
-                        user_id: clerkUser?.id
+                        user_id: clerkUser?.id,
+                        user_scale: userScale,
+                        tx: txRef.current,
+                        ty: tyRef.current
                     })
                     .eq('id', parseInt(id))
             } else {
@@ -742,7 +774,10 @@ const ImageBox = forwardRef<ImageBoxHandle, ImageBoxProps>(({
                         image_url: imageSrc,
                         marks: marks,
                         text_store: textStoreObj,
-                        user_id: clerkUser?.id
+                        user_id: clerkUser?.id,
+                        user_scale: userScale,
+                        tx: txRef.current,
+                        ty: tyRef.current
                     }
                 ])
             }
