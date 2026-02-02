@@ -988,6 +988,7 @@ const ImageBox = forwardRef<ImageBoxHandle, ImageBoxProps>(({
                                 }}
                             >
                                 <button
+                                    type="button"
                                     className="min-w-[64px] h-7 rounded-md bg-white border border-red-500 text-red-500 text-xs cursor-pointer transition-all hover:opacity-85 active:scale-[0.97]"
                                     onClick={(e) => {
                                         e.stopPropagation()
@@ -1024,6 +1025,7 @@ const ImageBox = forwardRef<ImageBoxHandle, ImageBoxProps>(({
                     {/* 操作按钮 */}
                     <div className="flex gap-2 mt-4 w-full justify-between">
                         <button
+                            type="button"
                             className={`px-4 py-2 rounded text-sm font-medium transition-all ${adjustMode
                                     ? 'bg-green-500 text-white border border-green-500'
                                     : 'bg-gray-400 text-white border border-gray-400'
@@ -1034,6 +1036,7 @@ const ImageBox = forwardRef<ImageBoxHandle, ImageBoxProps>(({
                         </button>
                         <div className="flex gap-2">
                             <button
+                                type="button"
                                 className="px-4 py-2 rounded text-sm font-medium bg-white text-red-600 border border-red-600 hover:bg-red-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                                 onClick={handleDelete}
                                 disabled={!imageSrc}
@@ -1041,8 +1044,13 @@ const ImageBox = forwardRef<ImageBoxHandle, ImageBoxProps>(({
                                 Delete
                             </button>
                             <button
+                                type="button"
                                 className="px-4 py-2 rounded text-sm font-medium bg-white text-green-600 border border-green-600 hover:bg-green-50 transition-colors"
-                                onClick={() => fileInputRef.current?.click()}
+                                onClick={(e) => {
+                                    e.preventDefault()
+                                    e.stopPropagation()
+                                    fileInputRef.current?.click()
+                                }}
                             >
                                 Add/Replace
                             </button>
