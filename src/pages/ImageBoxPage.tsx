@@ -4,6 +4,7 @@ import ImageBox, { ImageBoxHandle } from '@/components/ImageBox'
 import { useClerkSupabase } from '@/hooks/useClerkSupabase'
 import { useUser } from '@clerk/clerk-react'
 
+/** 详情页公开访问：从 image_boxes 按 id 拉取，所有人（含未登录）可看图片和文字；仅所有者可编辑/发布 */
 const ImageBoxPage = () => {
     const { id } = useParams()
     const imageBoxRef = useRef<ImageBoxHandle>(null)
