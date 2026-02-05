@@ -749,32 +749,30 @@ const ImageBox = forwardRef<ImageBoxHandle, ImageBoxProps>(({
                 textStoreObj[key] = value
             })
 
-            let query = supabase.from('image_boxes')
+            let query = supabase.from('layer_box')
             let result;
 
             if (id) {
-                // 更新现有记录
                 result = await query
                     .update({
-                        title: title,
+                        layer_title: title,
                         image_url: imageSrc,
                         marks: marks,
                         text_store: textStoreObj,
-                        user_id: clerkUser?.id,
+                        clerk_id: clerkUser?.id ?? null,
                         user_scale: userScale,
                         tx: txRef.current,
                         ty: tyRef.current
                     })
                     .eq('id', parseInt(id))
             } else {
-                // 插入新记录
                 result = await query.insert([
                     {
-                        title: title,
+                        layer_title: title,
                         image_url: imageSrc,
                         marks: marks,
                         text_store: textStoreObj,
-                        user_id: clerkUser?.id,
+                        clerk_id: clerkUser?.id ?? null,
                         user_scale: userScale,
                         tx: txRef.current,
                         ty: tyRef.current

@@ -3,7 +3,7 @@ import { useUser, UserButton } from '@clerk/clerk-react'
 import { useNavigate } from 'react-router-dom'
 import { useClerkSupabase } from '@/hooks/useClerkSupabase'
 
-/** Dashboard 列表项：来自 Table Editor 的 image_boxes，按 user_id 筛出当前用户的记录，title 列为项目标题 */
+/** Dashboard 列表项：来自 layer_box，按 clerk_id 筛当前用户，layer_title 为项目标题 */
 interface DashboardItem {
   id: string
   title: string
@@ -25,7 +25,7 @@ const Dashboard = () => {
     if (!deleteId) return
     try {
       const { error } = await supabase
-        .from('image_boxes')
+        .from('layer_box')
         .delete()
         .eq('id', deleteId)
       
@@ -42,11 +42,10 @@ const Dashboard = () => {
       if (!isLoaded || !user) return
       try {
         setLoading(true)
-        // 数据获取：image_boxes 表按 user_id 筛出当前用户的行，title 列作为 dashboard 项目标题
         const { data, error } = await supabase
-          .from('image_boxes')
-          .select('id, title, image_url, created_at')
-          .eq('user_id', user.id)
+          .from('layer_box')
+          .select('id, layer_title, image_url, created_at')
+          .eq('clerk_id', user.id)
           .order('created_at', { ascending: false })
 
         if (error) {
@@ -54,7 +53,7 @@ const Dashboard = () => {
         } else if (data) {
           const formattedFiles: DashboardItem[] = data.map(item => ({
             id: String(item.id),
-            title: item.title || 'Untitled Project',
+            title: (item as { layer_title?: string }).layer_title || 'Untitled Project',
             createdAt: new Date(item.created_at).toLocaleDateString('en-US', {
               month: 'short',
               day: 'numeric',
