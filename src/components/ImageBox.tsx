@@ -17,6 +17,10 @@ interface ImageBoxProps {
     initialTx?: number
     initialTy?: number
     id?: string
+    /** 当前录音的公开地址，保存时会写入 layer_box.audio_url */
+    audioUrl?: string | null
+    /** 插槽：渲染在 Enter title 和 image 框之间 */
+    slotBetweenTitleAndImage?: React.ReactNode
 }
 
 const MAX_FILE_SIZE = 10 * 1024 * 1024 // 10MB
@@ -57,7 +61,9 @@ const ImageBox = forwardRef<ImageBoxHandle, ImageBoxProps>(({
     initialUserScale = 1,
     initialTx = 0,
     initialTy = 0,
-    id
+    id,
+    audioUrl = null,
+    slotBetweenTitleAndImage
 }: ImageBoxProps = {}, ref) => {
     // 状态管理
     const supabase = useClerkSupabase()
@@ -752,6 +758,7 @@ const ImageBox = forwardRef<ImageBoxHandle, ImageBoxProps>(({
             let query = supabase.from('layer_box')
             let result;
 
+            const audioUrlValue = audioUrl && audioUrl.trim() !== '' ? audioUrl.trim() : null
             if (id) {
                 result = await query
                     .update({
@@ -762,7 +769,8 @@ const ImageBox = forwardRef<ImageBoxHandle, ImageBoxProps>(({
                         clerk_id: clerkUser?.id ?? null,
                         user_scale: userScale,
                         tx: txRef.current,
-                        ty: tyRef.current
+                        ty: tyRef.current,
+                        audio_url: audioUrlValue
                     })
                     .eq('id', parseInt(id))
             } else {
@@ -775,7 +783,8 @@ const ImageBox = forwardRef<ImageBoxHandle, ImageBoxProps>(({
                         clerk_id: clerkUser?.id ?? null,
                         user_scale: userScale,
                         tx: txRef.current,
-                        ty: tyRef.current
+                        ty: tyRef.current,
+                        audio_url: audioUrlValue
                     }
                 ])
             }
@@ -853,6 +862,8 @@ const ImageBox = forwardRef<ImageBoxHandle, ImageBoxProps>(({
                         placeholder="Enter title..."
                         className="w-full md:w-[500px] h-[40px] px-3 py-1 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent mb-2"
                     />
+
+                    {slotBetweenTitleAndImage}
 
                     {/* 图片框 */}
                     <div
@@ -1056,8 +1067,8 @@ const ImageBox = forwardRef<ImageBoxHandle, ImageBoxProps>(({
                     </div>
                 </div>
 
-                {/* 右侧：文字面板和序列条 */}
-                <div className="flex gap-5 flex-1 w-full md:w-auto relative md:mt-[48px]">
+                {/* 右侧：文字面板和序列条，与图片框底对齐（上边距约 100px，使 300px 高文字框底与图片框底同一水平） */}
+                <div className="flex gap-5 flex-1 w-full md:w-auto relative md:mt-[112px]">
                     <div
                         ref={textPanelRef}
                         className="min-w-0"
