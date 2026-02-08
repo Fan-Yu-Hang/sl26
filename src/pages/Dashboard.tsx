@@ -3,7 +3,7 @@ import { useUser, UserButton } from '@clerk/clerk-react'
 import { useNavigate } from 'react-router-dom'
 import { useClerkSupabase } from '@/hooks/useClerkSupabase'
 
-/** Dashboard 列表项：来自 layer_box，按 clerk_id 筛当前用户，layer_title 为项目标题 */
+/** Dashboard 列表项：来自 layers，按 clerk_id 筛当前用户；image_url 取首 iframe */
 interface DashboardItem {
   id: string
   title: string
@@ -25,10 +25,9 @@ const Dashboard = () => {
     if (!deleteId) return
     try {
       const { error } = await supabase
-        .from('layer_box')
+        .from('layers')
         .delete()
         .eq('id', deleteId)
-      
       if (error) throw error
       setFiles(prev => prev.filter(f => f.id !== deleteId))
       setDeleteId(null)
@@ -42,27 +41,66 @@ const Dashboard = () => {
       if (!isLoaded || !user) return
       try {
         setLoading(true)
-        const { data, error } = await supabase
-          .from('layer_box')
-          .select('id, layer_title, image_url, created_at')
+        const { data: layersData, error: layersError } = await supabase
+          .from('layers')
+          .select('id, layer_title, created_at, iframe_ids')
           .eq('clerk_id', user.id)
           .order('created_at', { ascending: false })
 
-        if (error) {
-          console.error('Error fetching files:', error)
-        } else if (data) {
-          const formattedFiles: DashboardItem[] = data.map(item => ({
-            id: String(item.id),
-            title: (item as { layer_title?: string }).layer_title || 'Untitled Project',
-            createdAt: new Date(item.created_at).toLocaleDateString('en-US', {
+        if (layersError) {
+          console.error('Error fetching layers:', layersError)
+          setFiles([])
+          return
+        }
+        if (!layersData?.length) {
+          setFiles([])
+          return
+        }
+
+        const firstIframeIds = layersData
+          .map(l => ((l as { iframe_ids?: number[] }).iframe_ids ?? [])[0])
+          .filter((id): id is number => id != null)
+        if (firstIframeIds.length === 0) {
+          setFiles(layersData.map(l => ({
+            id: String(l.id),
+            title: (l as { layer_title?: string }).layer_title || 'Untitled Project',
+            createdAt: new Date(l.created_at).toLocaleDateString('en-US', {
               month: 'short',
               day: 'numeric',
               year: 'numeric'
             }),
-            image_url: item.image_url
-          }))
-          setFiles(formattedFiles)
+            image_url: ''
+          })))
+          return
         }
+
+        const { data: iframesData, error: iframesError } = await supabase
+          .from('iframes')
+          .select('id, image_url')
+          .in('id', firstIframeIds)
+
+        const imageByIframeId: Record<number, string> = {}
+        if (!iframesError && iframesData) {
+          iframesData.forEach((row: { id: number; image_url?: string }) => {
+            imageByIframeId[row.id] = row.image_url ?? ''
+          })
+        }
+
+        const formattedFiles: DashboardItem[] = layersData.map(l => {
+          const iframeIds = (l as { iframe_ids?: number[] }).iframe_ids ?? []
+          const firstId = iframeIds[0]
+          return {
+            id: String(l.id),
+            title: (l as { layer_title?: string }).layer_title || 'Untitled Project',
+            createdAt: new Date(l.created_at).toLocaleDateString('en-US', {
+              month: 'short',
+              day: 'numeric',
+              year: 'numeric'
+            }),
+            image_url: firstId != null ? (imageByIframeId[firstId] ?? '') : ''
+          }
+        })
+        setFiles(formattedFiles)
       } catch (err) {
         console.error('Unexpected error fetching files:', err)
       } finally {

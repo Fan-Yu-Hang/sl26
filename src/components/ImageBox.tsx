@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect, forwardRef, useImperativeHandle } from 'react'
 import { useClerkSupabase } from '@/hooks/useClerkSupabase'
 import { useUser } from '@clerk/clerk-react'
+import IFrameEditorCard from './IFrameEditorCard'
 
 interface Mark {
     id: number
@@ -17,10 +18,16 @@ interface ImageBoxProps {
     initialTx?: number
     initialTy?: number
     id?: string
-    /** 当前录音的公开地址，保存时会写入 layer_box.audio_url */
+    /** 当前录音的公开地址，保存时会写入 layer_box.audio_url（当未使用 onSave 时） */
     audioUrl?: string | null
+    /** 若提供，保存时调用此回调而非写 layer_box；用于迁移到 layers+iframes */
+    onSave?: (payload: ImageBoxSavePayload) => Promise<boolean>
+    /** 是否显示 layer 标题输入框（多 iframe 时仅第一块显示，其余不显示） */
+    showLayerTitleInput?: boolean
     /** 插槽：渲染在 Enter title 和 image 框之间 */
     slotBetweenTitleAndImage?: React.ReactNode
+    /** 可选：删除整张卡片时调用（多 iframe 时由页面移除当前项） */
+    onDeleteCard?: () => void
 }
 
 const MAX_FILE_SIZE = 10 * 1024 * 1024 // 10MB
@@ -49,8 +56,21 @@ function makeStoragePath(file: File) {
   return `uploads/${new Date().toISOString().slice(0, 10)}/${id}.${ext}`
 }
 
+/** 供外部保存（如写入 layers+iframes）时使用的 payload */
+export interface ImageBoxSavePayload {
+    layer_title: string
+    image_url: string
+    marks: Mark[]
+    text_store: Record<number, string>
+    user_scale: number
+    tx: number
+    ty: number
+}
+
 export interface ImageBoxHandle {
     save: () => Promise<boolean>;
+    /** 返回当前编辑数据（不落库），用于多 iframe 时统一保存 */
+    getPayload: () => ImageBoxSavePayload | null;
 }
 
 const ImageBox = forwardRef<ImageBoxHandle, ImageBoxProps>(({ 
@@ -63,7 +83,10 @@ const ImageBox = forwardRef<ImageBoxHandle, ImageBoxProps>(({
     initialTy = 0,
     id,
     audioUrl = null,
-    slotBetweenTitleAndImage
+    onSave: onSaveProp,
+    showLayerTitleInput = true,
+    slotBetweenTitleAndImage,
+    onDeleteCard
 }: ImageBoxProps = {}, ref) => {
     // 状态管理
     const supabase = useClerkSupabase()
@@ -739,26 +762,46 @@ const ImageBox = forwardRef<ImageBoxHandle, ImageBoxProps>(({
         showStatus('Deleted', 'success')
     }
 
-    // 保存到 Supabase
+    // 保存到 Supabase（或通过 onSave 交给上层写 layers+iframes）
     const handleSave = async () => {
         if (!imageSrc) {
             showStatus('Upload image first', 'error')
             return false
         }
 
+        const textStoreObj: Record<number, string> = {}
+        textStore.forEach((value, key) => {
+            textStoreObj[key] = value
+        })
+
+        const payload: ImageBoxSavePayload = {
+            layer_title: title,
+            image_url: imageSrc,
+            marks,
+            text_store: textStoreObj,
+            user_scale: userScale,
+            tx: txRef.current,
+            ty: tyRef.current
+        }
+
+        if (onSaveProp) {
+            try {
+                showStatus('Saving...', 'info')
+                const ok = await onSaveProp(payload)
+                if (ok) showStatus('Saved successfully', 'success')
+                return ok
+            } catch (err) {
+                console.error('Unexpected error during save:', err)
+                showStatus('Failed to save data', 'error')
+                return false
+            }
+        }
+
         try {
             showStatus('Saving...', 'info')
-            
-            // 将 Map 转换为对象以便存储为 JSONB
-            const textStoreObj: Record<number, string> = {}
-            textStore.forEach((value, key) => {
-                textStoreObj[key] = value
-            })
-
-            let query = supabase.from('layer_box')
-            let result;
-
             const audioUrlValue = audioUrl && audioUrl.trim() !== '' ? audioUrl.trim() : null
+            let query = supabase.from('layer_box')
+            let result
             if (id) {
                 result = await query
                     .update({
@@ -788,17 +831,14 @@ const ImageBox = forwardRef<ImageBoxHandle, ImageBoxProps>(({
                     }
                 ])
             }
-
             const { error } = result
-
             if (error) {
                 console.error('Error saving to Supabase:', error)
                 showStatus(formatSupabaseErrorMessage(error), 'error')
                 return false
-            } else {
-                showStatus('Saved successfully', 'success')
-                return true
             }
+            showStatus('Saved successfully', 'success')
+            return true
         } catch (err) {
             console.error('Unexpected error during save:', err)
             showStatus('Failed to save data', 'error')
@@ -806,314 +846,92 @@ const ImageBox = forwardRef<ImageBoxHandle, ImageBoxProps>(({
         }
     }
 
-    // 暴露保存方法给外部
+    const getPayload = (): ImageBoxSavePayload | null => {
+        if (!imageSrc) return null
+        const textStoreObj: Record<number, string> = {}
+        textStore.forEach((value, key) => { textStoreObj[key] = value })
+        return {
+            layer_title: title,
+            image_url: imageSrc,
+            marks,
+            text_store: textStoreObj,
+            user_scale: userScale,
+            tx: txRef.current,
+            ty: tyRef.current
+        }
+    }
+
     useImperativeHandle(ref, () => ({
-        save: handleSave
+        save: handleSave,
+        getPayload
     }))
 
 
 
     return (
-        <div className="w-full max-w-[820px] relative flex flex-col items-center">
-            {/* 主容器：图片框 + 文字面板和序列条 */}
-            <div className="flex flex-col md:flex-row gap-6 items-start w-full">
-                {/* 左侧：缩放滑条 + 图片框 */}
-                <div className="relative flex-shrink-0">
-                    {/* 缩放滑条 */}
-                    <div
-                        ref={sliderRef}
-                        className="absolute right-full mr-8 w-2.5 h-48 rounded-full bg-gradient-to-b from-gray-200 to-gray-300 shadow-inner cursor-pointer"
-                        style={{ transform: 'translateY(-50%)', top: '50%' }}
-                        onMouseDown={handleSliderMouseDown}
-                        onClick={(e) => {
-                            if (!sliderLocked) {
-                                const rect = sliderRef.current?.getBoundingClientRect()
-                                if (rect) {
-                                    const y = e.clientY - rect.top
-                                    const newScale = scaleFromPos(y)
-                                    setUserScale(Number(newScale.toFixed(2)))
-                                    if (newScale === 1) {
-                                        txRef.current = 0
-                                        tyRef.current = 0
-                                    }
-                                }
-                            }
-                        }}
-                    >
-                        <div
-                            ref={knobRef}
-                            className="absolute left-1/2 w-4 h-4 rounded-full bg-blue-600 shadow-lg cursor-ns-resize hover:bg-blue-700 transition-colors"
-                            style={{
-                                transform: 'translate(-50%, -50%)',
-                                top: `${(1 - (userScale - 1) / 2) * 100}%`,
-                            }}
-                            onMouseDown={(e) => {
-                                e.stopPropagation()
-                                handleSliderMouseDown(e)
-                            }}
-                        />
-                    </div>
-
-                    {/* Title 输入框 */}
-                    <input
-                        type="text"
-                        value={title}
-                        onChange={(e) => setTitle(e.target.value)}
-                        placeholder="Enter title..."
-                        className="w-full md:w-[500px] h-[40px] px-3 py-1 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent mb-2"
-                    />
-
-                    {slotBetweenTitleAndImage}
-
-                    {/* 图片框 */}
-                    <div
-                        ref={imageBoxRef}
-                        className="relative w-full md:w-[500px] h-[300px] bg-gradient-to-b from-white to-gray-100 border border-gray-200 rounded-lg shadow-md overflow-hidden cursor-pointer hover:shadow-lg transition-shadow"
-                        onDoubleClick={handleDoubleClick}
-                        // wheel 事件在原生事件监听器中处理，避免 passive 事件监听器错误
-                        style={{ 
-                            cursor: adjustMode ? 'grab' : 'pointer',
-                            touchAction: 'none' // 阻止默认触摸行为，防止页面缩放
-                        }}
-                    >
-                        {/* 提示文字（无图片时显示） */}
-                        {!imageSrc && (
-                                    <div className="absolute inset-0 flex items-center justify-center bg-gray-50/55 backdrop-blur-sm text-gray-600 text-sm user-select-none pointer-events-none z-0">
-                                Click Add to Upload Image &lt; 10MB (PNG / JPG / JPEG / WebP)
-                            </div>
-                        )}
-
-                        {/* Viewport - 参考 index2.html，不使用 CSS 居中，完全靠 transform 控制位置 */}
-                        <div
-                            ref={viewportRef}
-                            className="absolute inset-0 pointer-events-auto"
-                            style={{
-                                willChange: 'transform',
-                                background: 'transparent',
-                                zIndex: 1
-                            }}
-                        >
-                            {imageSrc && (
-                                <img
-                                    ref={imageRef}
-                                    src={imageSrc}
-                                    alt=""
-                                    className="max-w-none max-h-none select-none pointer-events-auto"
-                                    style={{
-                                        position: 'absolute',
-                                        top: 0,
-                                        left: 0,
-                                        transformOrigin: 'top left',
-                                        transition: 'transform 380ms cubic-bezier(0.22, 1, 0.36, 1)',
-                                        willChange: 'transform',
-                                        backfaceVisibility: 'hidden',
-                                        WebkitUserSelect: 'none',
-                                        userSelect: 'none',
-                                        // react CSSProperties typings 不包含这些非标准字段，这里用 any 兼容
-                                        ...( { WebkitUserDrag: 'none', userDrag: 'none' } as any ),
-                                    }}
-                                />
-                            )}
-                        </div>
-
-                        {/* 标记点覆盖层 - 始终显示 */}
-                        <div
-                            ref={overlayRef}
-                            className="absolute inset-0 pointer-events-none z-10"
-                            style={{ pointerEvents: adjustMode ? 'none' : 'auto' }}
-                        >
-                            {marks.map((mark, index) => {
-                                const displayIndex = index + 1
-                                return (
-                                <div
-                                    key={mark.id}
-                                    className={`absolute w-5 h-5 rounded-full border-2 flex items-center justify-center cursor-pointer transition-all ${selectedMarkId === mark.id
-                                            ? 'bg-blue-500 border-blue-500'
-                                            : 'bg-transparent border-green-700'
-                                        }`}
-                                    style={{
-                                        left: `${mark.x}px`,
-                                        top: `${mark.y}px`,
-                                        transform: 'translate(-50%, -50%)',
-                                    }}
-                                    onClick={(e) => {
-                                        e.stopPropagation()
-                                        handleMarkClick(mark.id)
-                                    }}
-                                    onMouseDown={(e) => {
-                                        e.stopPropagation()
-                                        handleMarkDragStart(e, mark.id)
-                                    }}
-                                    onContextMenu={(e) => {
-                                        e.preventDefault()
-                                        e.stopPropagation()
-                                        showDeletePopover(mark.id, mark.x, mark.y)
-                                    }}
-                                    onTouchStart={(e) => {
-                                        e.stopPropagation()
-                                        // 移动端长按触发删除菜单
-                                        const timer = window.setTimeout(() => {
-                                            showDeletePopover(mark.id, mark.x, mark.y)
-                                        }, 500)
-                                        longPressTimerRef.current.set(mark.id, timer)
-                                    }}
-                                    onTouchEnd={(e) => {
-                                        e.stopPropagation()
-                                        // 清除长按定时器
-                                        const timer = longPressTimerRef.current.get(mark.id)
-                                        if (timer) {
-                                            clearTimeout(timer)
-                                            longPressTimerRef.current.delete(mark.id)
-                                        }
-                                    }}
-                                    onTouchCancel={(e) => {
-                                        e.stopPropagation()
-                                        // 清除长按定时器
-                                        const timer = longPressTimerRef.current.get(mark.id)
-                                        if (timer) {
-                                            clearTimeout(timer)
-                                            longPressTimerRef.current.delete(mark.id)
-                                        }
-                                    }}
-                                >
-                                    <span
-                                        className={`text-xs font-bold ${selectedMarkId === mark.id ? 'text-white' : 'text-black'
-                                            }`}
-                                    >
-                                        {displayIndex}
-                                    </span>
-                                </div>
-                            )})}
-                        </div>
-
-                        {/* 删除菜单 Popover */}
-                        {popoverMarkId && popoverPosition && (
-                            <div
-                                className="absolute bg-white border border-gray-200 rounded-lg shadow-lg px-2 py-1.5 text-xs text-gray-800 z-30 flex items-center"
-                                style={{
-                                    left: `${popoverPosition.left}px`,
-                                    top: `${popoverPosition.top}px`,
-                                    transform: 'translateY(-50%)',
-                                }}
-                            >
-                                <button
-                                    type="button"
-                                    className="min-w-[64px] h-7 rounded-md bg-white border border-red-500 text-red-500 text-xs cursor-pointer transition-all hover:opacity-85 active:scale-[0.97]"
-                                    onClick={(e) => {
-                                        e.stopPropagation()
-                                        handleDeleteMark(popoverMarkId)
-                                    }}
-                                >
-                                    Delete
-                                </button>
-                            </div>
-                        )}
-
-                        {/* 状态提示 */}
-                        {status.visible && (
-                            <div
-                                className={`absolute left-2.5 bottom-2.5 px-2.5 py-1.5 text-xs font-semibold rounded-lg text-white shadow-md backdrop-blur-sm z-20 ${status.type === 'info'
-                                        ? 'bg-gray-700/90'
-                                        : status.type === 'success'
-                                            ? 'bg-teal-700/90'
-                                            : 'bg-red-700/90'
-                                    }`}
-                            >
-                                {status.text}
-                            </div>
-                        )}
-                        <input
-                            ref={fileInputRef}
-                            type="file"
-                            accept="image/png, image/jpeg, image/jpg, image/webp"
-                            className="hidden"
-                            onChange={handleFileUpload}
-                        />
-                    </div>
-
-                    {/* 操作按钮 */}
-                    <div className="flex gap-2 mt-4 w-full justify-between">
-                        <button
-                            type="button"
-                            className={`px-4 py-2 rounded text-sm font-medium transition-all ${adjustMode
-                                    ? 'bg-green-500 text-white border border-green-500'
-                                    : 'bg-gray-400 text-white border border-gray-400'
-                                }`}
-                            onClick={handleAdjustToggle}
-                        >
-                            {adjustMode ? 'Adjust' : 'LOCK'}
-                        </button>
-                        <div className="flex gap-2">
-                            <button
-                                type="button"
-                                className="px-4 py-2 rounded text-sm font-medium bg-white text-red-600 border border-red-600 hover:bg-red-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                                onClick={handleDelete}
-                                disabled={!imageSrc}
-                            >
-                                Delete
-                            </button>
-                            <button
-                                type="button"
-                                className="px-4 py-2 rounded text-sm font-medium bg-white text-green-600 border border-green-600 hover:bg-green-50 transition-colors"
-                                onClick={(e) => {
-                                    e.preventDefault()
-                                    e.stopPropagation()
-                                    fileInputRef.current?.click()
-                                }}
-                            >
-                                Add/Replace
-                            </button>
-                        </div>
-                    </div>
-                </div>
-
-                {/* 右侧：文字面板和序列条，与图片框底对齐（上边距约 100px，使 300px 高文字框底与图片框底同一水平） */}
-                <div className="flex gap-5 flex-1 w-full md:w-auto relative md:mt-[112px]">
-                    <div
-                        ref={textPanelRef}
-                        className="min-w-0"
-                        style={{ height: '300px', width: '200px' }}
-                    >
-                        <textarea
-                            className="w-full h-full border border-gray-300 rounded-lg p-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent resize-none"
-                            placeholder={currentTextId ? (() => {
-                                const markIndex = marks.findIndex(m => m.id === currentTextId)
-                                const displayIndex = markIndex >= 0 ? markIndex + 1 : currentTextId
-                                return `Type text for label ${displayIndex}...`
-                            })() : 'Double click the image area after click left-botton Adjust'}
-                            value={currentTextId ? (textStore.get(currentTextId) || '') : ''}
-                            onChange={(e) => {
-                                if (currentTextId) {
-                                    const newStore = new Map(textStore)
-                                    newStore.set(currentTextId, e.target.value)
-                                    setTextStore(newStore)
-                                }
-                            }}
-                            disabled={!currentTextId}
-                        />
-                    </div>
-                    <div
-                        ref={seqBarRef}
-                        className="w-8 flex flex-col gap-1 overflow-y-auto flex-shrink-0"
-                        style={{ height: '224px' }}
-                    >
-                        {marks.map((mark, index) => {
-                            const displayIndex = index + 1
-                            return (
-                            <div
-                                key={mark.id}
-                                className={`w-5 h-5 rounded-full border-2 flex items-center justify-center text-xs font-bold cursor-pointer transition-all mx-auto ${selectedMarkId === mark.id
-                                        ? 'bg-blue-500 border-blue-500 text-white'
-                                        : 'bg-transparent border-green-700 text-black'
-                                    }`}
-                                onClick={() => handleMarkClick(mark.id)}
-                            >
-                                {displayIndex}
-                            </div>
-                        )})}
-                    </div>
-                </div>
-            </div>
+        <div className="w-full relative flex flex-col items-center">
+            {showLayerTitleInput && (
+                <input
+                    type="text"
+                    value={title}
+                    onChange={(e) => setTitle(e.target.value)}
+                    placeholder="Enter title..."
+                    className="w-full md:w-[500px] h-[40px] px-3 py-1 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent mb-2"
+                />
+            )}
+            {slotBetweenTitleAndImage}
+            <IFrameEditorCard
+                sliderRef={sliderRef}
+                knobRef={knobRef}
+                imageBoxRef={imageBoxRef}
+                viewportRef={viewportRef}
+                imageRef={imageRef}
+                overlayRef={overlayRef}
+                fileInputRef={fileInputRef}
+                textPanelRef={textPanelRef}
+                seqBarRef={seqBarRef}
+                imageSrc={imageSrc}
+                marks={marks}
+                selectedMarkId={selectedMarkId}
+                userScale={userScale}
+                adjustMode={adjustMode}
+                status={status}
+                popoverMarkId={popoverMarkId}
+                popoverPosition={popoverPosition}
+                textStore={textStore}
+                currentTextId={currentTextId}
+                longPressTimerRef={longPressTimerRef}
+                onSliderMouseDown={handleSliderMouseDown}
+                onSliderClick={(e) => {
+                    if (!sliderLocked && sliderRef.current) {
+                        const rect = sliderRef.current.getBoundingClientRect()
+                        const y = e.clientY - rect.top
+                        const newScale = scaleFromPos(y)
+                        setUserScale(Number(newScale.toFixed(2)))
+                        if (newScale === 1) {
+                            txRef.current = 0
+                            tyRef.current = 0
+                        }
+                    }
+                }}
+                onImageDoubleClick={handleDoubleClick}
+                onMarkClick={handleMarkClick}
+                onMarkDragStart={handleMarkDragStart}
+                onMarkContextMenu={showDeletePopover}
+                onDeleteMarkPopover={handleDeleteMark}
+                onDeleteImage={handleDelete}
+                onAdjustToggle={handleAdjustToggle}
+                onReplaceImageClick={() => fileInputRef.current?.click()}
+                onFileChange={handleFileUpload}
+                onTextChange={(value) => {
+                    if (currentTextId) {
+                        const newStore = new Map(textStore)
+                        newStore.set(currentTextId, value)
+                        setTextStore(newStore)
+                    }
+                }}
+                onDeleteCard={onDeleteCard}
+            />
         </div>
     )
 })
