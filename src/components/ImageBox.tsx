@@ -252,26 +252,34 @@ const ImageBox = forwardRef<ImageBoxHandle, ImageBoxProps>(({
       const nh = img.naturalHeight
       if (!nw || !nh) return
       
+      const prevNw = nwRef.current
+      const prevNh = nhRef.current
+
       // 保存尺寸
       nwRef.current = nw
       nhRef.current = nh
-      
+
       // 获取容器尺寸
       const rect = box.getBoundingClientRect()
       const cw = rect.width
       const ch = rect.height
-      
+
       // 计算缩放比例使图片适应容器
       const scale = Math.min(cw / nw, ch / nh)
       baseScaleRef.current = scale
-      
+
       const isInitialImage = imageSrc === initialImageSrc && !hasChangedImageRef.current
-      
+      /** 同一张图仅换 URL（如 blob 预览 → Supabase 公网 URL），保留用户已调的缩放与位移 */
+      const sameImageDifferentUrl =
+        hasChangedImageRef.current && prevNw > 0 && prevNw === nw && prevNh === nh
+
       // 设置或恢复偏移和缩放
       if (isInitialImage) {
         txRef.current = initialTx
         tyRef.current = initialTy
         userScaleRef.current = initialUserScale
+      } else if (sameImageDifferentUrl) {
+        // 不覆盖 userScaleRef / txRef / tyRef
       } else {
         txRef.current = 0
         tyRef.current = 0
@@ -301,12 +309,18 @@ const ImageBox = forwardRef<ImageBoxHandle, ImageBoxProps>(({
       requestAnimationFrame(() => {
         img.style.transition = 'transform 300ms ease-out'
         setUserScale(userScaleRef.current)
-        setAdjustMode(true)
-        setSliderLocked(false)
+        // 加载后保持锁定：仅用户点击 LOCK/Adjust 后才进入调整模式
+        setAdjustMode(false)
+        setSliderLocked(true)
         if (overlayRef.current) {
-          overlayRef.current.style.pointerEvents = 'none'
+          overlayRef.current.style.pointerEvents = 'auto'
         }
-        showStatus('Uploaded', 'success')
+        if (imageBoxRef.current) {
+          imageBoxRef.current.style.cursor = 'pointer'
+        }
+        if (hasChangedImageRef.current) {
+          showStatus('Uploaded', 'success')
+        }
         
         // 下一帧后清除标志
         requestAnimationFrame(() => {
@@ -382,20 +396,20 @@ const ImageBox = forwardRef<ImageBoxHandle, ImageBoxProps>(({
         }
     }, [userScale, adjustMode, sliderLocked, imageSrc])
 
-    // 缩放滑条处理
-    const scaleFromPos = (y: number) => {
-        const trackHeight = 160
+    // 缩放滑条处理（trackHeight 须与滑条 DOM 实际高度一致，否则 y 被错误钳位会把缩放算成 1）
+    const scaleFromPos = (y: number, trackHeight: number) => {
         const knobHeight = 16
         const min = 1
         const max = 3
+        const denom = Math.max(1, trackHeight - knobHeight)
         const clampedY = Math.max(knobHeight / 2, Math.min(trackHeight - knobHeight / 2, y))
-        const t = 1 - (clampedY - knobHeight / 2) / (trackHeight - knobHeight)
+        const t = 1 - (clampedY - knobHeight / 2) / denom
         return min + t * (max - min)
     }
 
     const handleSliderMouseDown = (e: React.MouseEvent<HTMLDivElement>) => {
         if (sliderLocked) {
-            showStatus('Click LOCK', 'info')
+            showStatus('Click Adjust', 'info')
             return
         }
         e.preventDefault()
@@ -405,7 +419,7 @@ const ImageBox = forwardRef<ImageBoxHandle, ImageBoxProps>(({
         if (sliderRef.current) {
             const rect = sliderRef.current.getBoundingClientRect()
             const y = e.clientY - rect.top
-            const newScale = scaleFromPos(y)
+            const newScale = scaleFromPos(y, rect.height)
             setUserScale(Number(newScale.toFixed(2)))
             if (newScale === 1) {
                 txRef.current = 0
@@ -417,7 +431,7 @@ const ImageBox = forwardRef<ImageBoxHandle, ImageBoxProps>(({
             if (!isDraggingRef.current || !sliderRef.current) return
             const rect = sliderRef.current.getBoundingClientRect()
             const y = e.clientY - rect.top
-            const newScale = scaleFromPos(y)
+            const newScale = scaleFromPos(y, rect.height)
             setUserScale(Number(newScale.toFixed(2)))
             if (newScale === 1) {
                 txRef.current = 0
@@ -537,7 +551,7 @@ const ImageBox = forwardRef<ImageBoxHandle, ImageBoxProps>(({
             // 使用 ref 检查状态，避免闭包问题
             if (!imageRef.current?.src || sliderLockedRef.current) {
                 if (sliderLockedRef.current) {
-                    showStatus('Click Adjust', 'info')
+                    showStatus('Click LOCK', 'info')
                 }
                 return
             }
@@ -587,7 +601,7 @@ const ImageBox = forwardRef<ImageBoxHandle, ImageBoxProps>(({
     const handleDoubleClick = (e: React.MouseEvent<HTMLDivElement>) => {
         // 只有在锁定状态下才能新增序号
         if (adjustMode) {
-            showStatus('Click LOCK', 'info')
+            showStatus('Click Adjust', 'info')
             return
         }
         if (!imageBoxRef.current || marks.length >= 8) {
@@ -641,7 +655,7 @@ const ImageBox = forwardRef<ImageBoxHandle, ImageBoxProps>(({
     const showDeletePopover = (markId: number, markX: number, markY: number) => {
         // 只有在锁定状态下才能删除序号
         if (adjustMode) {
-            showStatus('Click LOCK', 'info')
+            showStatus('Click Adjust', 'info')
             return
         }
         setPopoverMarkId(markId)
@@ -906,7 +920,7 @@ const ImageBox = forwardRef<ImageBoxHandle, ImageBoxProps>(({
                     if (!sliderLocked && sliderRef.current) {
                         const rect = sliderRef.current.getBoundingClientRect()
                         const y = e.clientY - rect.top
-                        const newScale = scaleFromPos(y)
+                        const newScale = scaleFromPos(y, rect.height)
                         setUserScale(Number(newScale.toFixed(2)))
                         if (newScale === 1) {
                             txRef.current = 0
