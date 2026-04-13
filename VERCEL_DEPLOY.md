@@ -64,14 +64,30 @@ git push -u origin main
 **环境变量：**
 
 - `VITE_CLERK_PUBLISHABLE_KEY` - Clerk 的 Publishable Key
+- `VITE_CLERK_POST_AUTH_REDIRECT`（可选）- 登录/注册成功后 Clerk 的默认跳转地址；不设则使用站内路径 `/dashboard`
 
 **配置步骤：**
 
-1. 在项目设置中找到 **"Environment Variables"**
-2. 添加 `VITE_CLERK_PUBLISHABLE_KEY`
-3. 填入你的 Clerk Publishable Key
-4. 选择环境（Production, Preview, Development）
-5. 点击 **"Save"**
+1. 打开 [Vercel Dashboard](https://vercel.com/dashboard) → 选中你的项目
+2. 顶部菜单进入 **Settings** → 左侧 **Environment Variables**
+3. 点击 **Add New**（或 **Add**）
+4. **Key** 填变量名，**Value** 填对应值；**Environment** 勾选需要的环境（至少勾选 **Production**；若预览环境也要一致，可再勾选 **Preview**）
+5. 点击 **Save**
+
+**可选：`VITE_CLERK_POST_AUTH_REDIRECT`（第 4 步）**
+
+若希望登录/注册后**固定**跳到带域名的 Dashboard（例如正式域名为 `www`）：
+
+| Key | Value（示例） |
+|-----|----------------|
+| `VITE_CLERK_POST_AUTH_REDIRECT` | `https://www.seelayer.com/dashboard` |
+
+- 仅填 **Key / Value**，不要加引号
+- 保存后必须 **重新触发一次部署**，新变量才会打进前端构建产物（见下方「重新部署」）
+
+不设该变量时，应用内仍使用相对路径 `/dashboard`（与当前访问域名同源，一般已够用）。
+
+**重新部署**：**Deployments** 页 → 最新部署右侧 **⋯** → **Redeploy**（勾选 *Use existing Build Cache* 可关，确保重新 `npm run build` 读入新环境变量）。
 
 ### 4. 部署设置
 
@@ -108,9 +124,10 @@ Vercel 会自动检测以下配置：
 
 在 Vercel 项目设置中配置以下环境变量：
 
-| 变量名                       | 说明                         | 必需 |
-| ---------------------------- | ---------------------------- | ---- |
-| `VITE_CLERK_PUBLISHABLE_KEY` | Clerk 认证的 Publishable Key | 是   |
+| 变量名                           | 说明                                                         | 必需 |
+| -------------------------------- | ------------------------------------------------------------ | ---- |
+| `VITE_CLERK_PUBLISHABLE_KEY`     | Clerk 认证的 Publishable Key                               | 是   |
+| `VITE_CLERK_POST_AUTH_REDIRECT`  | 登录/注册后 Clerk 回跳完整 URL（如 `https://www.seelayer.com/dashboard`） | 否   |
 
 ### Clerk 回调 URL 配置
 

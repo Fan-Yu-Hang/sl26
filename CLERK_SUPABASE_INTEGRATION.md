@@ -9,6 +9,28 @@
 
 ## 设置步骤
 
+### 0. Clerk Dashboard：长会话与登录后跳转（建议）
+
+#### 会话保持约三个月
+
+Clerk 新建实例默认 **Maximum lifetime 为 7 天**，到期后无论是否活跃都会要求重新登录，容易表现为「过几天又要登录」。
+
+1. 打开 [Clerk Dashboard → Sessions](https://dashboard.clerk.com/~/sessions)
+2. 启用 **Maximum lifetime**，将时长设为 **90 days**（或控制台允许的上限，按需选择）
+3. **Inactivity timeout** 可按业务开启；若关闭，则主要受 Maximum lifetime 约束
+
+说明见官方文档：[Session options](https://clerk.com/docs/guides/secure/session-options)。生产环境部分选项与 Clerk 套餐有关；浏览器对 Cookie 的最长期限等限制同样适用。
+
+#### 登录后跳转到 Dashboard
+
+本仓库在 `ClerkProvider` 上配置了 `signInFallbackRedirectUrl` / `signUpFallbackRedirectUrl`，默认跳转到 **`/dashboard`**（与当前访问域名同源，例如 `https://www.seelayer.com/dashboard`）。
+
+若需在构建时写死完整 URL，可设置环境变量：
+
+`VITE_CLERK_POST_AUTH_REDIRECT=https://www.seelayer.com/dashboard`
+
+首页 `/` 在检测到已登录时会自动重定向到 **`/dashboard`**。
+
 ### 1. 在 Supabase 中创建 users 表
 
 1. 登录 [Supabase Dashboard](https://app.supabase.com)

@@ -1,4 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
+import { Navigate } from 'react-router-dom'
+import { useUser } from '@clerk/clerk-react'
 import Header from '../components/Header'
 import Footer from '../components/Footer'
 import ImageBox from '../components/ImageBox'
@@ -15,6 +17,7 @@ import { ScrollTrigger } from 'gsap/ScrollTrigger'
 gsap.registerPlugin(ScrollTrigger)
 
 const Home = () => {
+  const { isSignedIn, isLoaded } = useUser()
   const featuresSectionRef = useRef<HTMLDivElement>(null)
   const featuresTitleRef = useRef<HTMLHeadingElement>(null)
   const featuresCardsRef = useRef<HTMLDivElement[]>([])
@@ -241,6 +244,18 @@ const Home = () => {
         '对厂商来说，每次软件更新了内容，会有一堆人追着问如何操作，之前的功能演示视频，反而成了待更新的错误信息，透见 SeeLayer 的核心俩功能之一，就是实时更新动动鼠标，文字随动',
     },
   ]
+
+  if (!isLoaded) {
+    return (
+      <div className="min-h-screen w-full flex items-center justify-center" style={{ backgroundColor: '#EFEFE9' }}>
+        <p className="text-gray-500 text-sm">Loading…</p>
+      </div>
+    )
+  }
+
+  if (isSignedIn) {
+    return <Navigate to="/dashboard" replace />
+  }
 
   return (
     <div className="min-h-screen w-full max-w-full overflow-x-hidden" style={{ backgroundColor: '#EFEFE9' }}>

@@ -8,6 +8,10 @@ import { useClerkSupabaseSync } from './hooks/useClerkSupabaseSync'
 // 从环境变量获取 Clerk Publishable Key
 const clerkPublishableKey = import.meta.env.VITE_CLERK_PUBLISHABLE_KEY
 
+/** 登录/注册完成后的默认跳转（相对路径即可；生产可设 VITE_CLERK_POST_AUTH_REDIRECT 为完整 URL） */
+const clerkPostAuthRedirect =
+  (import.meta.env.VITE_CLERK_POST_AUTH_REDIRECT as string | undefined)?.trim() || '/dashboard'
+
 if (!clerkPublishableKey) {
   console.warn('⚠️ VITE_CLERK_PUBLISHABLE_KEY is missing. Please add it to your .env file.')
 }
@@ -33,7 +37,11 @@ function AppContent() {
 
 function App() {
   return (
-    <ClerkProvider publishableKey={clerkPublishableKey || ''}>
+    <ClerkProvider
+      publishableKey={clerkPublishableKey || ''}
+      signInFallbackRedirectUrl={clerkPostAuthRedirect}
+      signUpFallbackRedirectUrl={clerkPostAuthRedirect}
+    >
       <AppContent />
     </ClerkProvider>
   )
